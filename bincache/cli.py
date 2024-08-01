@@ -13,6 +13,7 @@ DEFAULT_CACHE_DIR = os.path.join(os.path.expanduser("~"), '.cache', 'bincache')
 CONFIG_FILE = 'bincache.conf'
 DEFAULT_MAX_SIZE = 5 * 1024 * 1024 * 1024  # 5G
 LOCK_FILE_NAME = '.lock'
+GLOBAL_LOCK_FILE_NAME = 'global.lock'
 
 # 读取配置
 def read_config(cache_dir):
@@ -107,6 +108,17 @@ def acquire_lock(lock_file_path, lock_type):
 def release_lock(lock_file):
     fcntl.flock(lock_file, fcntl.LOCK_UN)
     lock_file.close()
+    
+# 全局锁定函数
+def acquire_global_lock(lock_type):
+    lock_file_path = os.path.join(get_cache_dir(), GLOBAL_LOCK_FILE_NAME)
+    lock_file = open(lock_file_path, 'w')
+    fcntl.flock(lock_file, lock_type)
+    return lock_file
+
+def release_global_lock(lock_file):
+    fcntl.flock(lock_file, fcntl.LOCK_UN)
+    lock_file.close()
 
 # 缓存输出
 def cache_output(binary, args, output):
@@ -115,7 +127,7 @@ def cache_output(binary, args, output):
     os.makedirs(cache_object_folder, exist_ok=True)
     lock_file_path = os.path.join(cache_object_folder, LOCK_FILE_NAME)
     
-    # Acquire write lock
+    global_lock = acquire_global_lock(fcntl.LOCK_SH)  # 获取全局读锁
     lock_file = acquire_lock(lock_file_path, fcntl.LOCK_EX)
     
     try:
@@ -123,8 +135,8 @@ def cache_output(binary, args, output):
             pickle.dump(output, f)
         enforce_cache_size()
     finally:
-        # Release write lock
         release_lock(lock_file)
+        release_global_lock(global_lock)  # 释放全局读锁
 
 # 获取缓存输出
 def get_cached_output(binary, args):
@@ -132,16 +144,19 @@ def get_cached_output(binary, args):
     cache_object_folder = os.path.dirname(cache_file)
     lock_file_path = os.path.join(cache_object_folder, LOCK_FILE_NAME)
     
-    if os.path.exists(cache_file):
-        # Acquire read lock
-        lock_file = acquire_lock(lock_file_path, fcntl.LOCK_SH)
+    global_lock = acquire_global_lock(fcntl.LOCK_SH)  # 获取全局读锁
+    
+    try:
+        if os.path.exists(cache_file):
+            lock_file = acquire_lock(lock_file_path, fcntl.LOCK_SH)
+            try:
+                with io.open(cache_file, 'rb') as f:
+                    return pickle.load(f)
+            finally:
+                release_lock(lock_file)
+    finally:
+        release_global_lock(global_lock)  # 释放全局读锁
         
-        try:
-            with io.open(cache_file, 'rb') as f:
-                return pickle.load(f)
-        finally:
-            # Release read lock
-            release_lock(lock_file)
     return None
 
 # 强制缓存大小
@@ -151,7 +166,6 @@ def enforce_cache_size():
     max_size = config['max_size']
     total_size = 0
     folders_with_files = []
-
     for prefix in os.listdir(cache_dir):
         prefix_path = os.path.join(cache_dir, prefix)
         if os.path.isdir(prefix_path):
@@ -170,12 +184,9 @@ def enforce_cache_size():
                         last_access_time = os.path.getatime(file_path)
                         folder_files.append((last_access_time, file_size, file_path))
                     folders_with_files.append((folder_size, folder_files, cache_object_folder))
-
     if total_size <= max_size:
         return
-
     folders_with_files.sort(reverse=True, key=lambda x: x[0])
-
     for folder_size, folder_files, cache_object_folder in folders_with_files:
         if total_size <= max_size:
             break
@@ -193,30 +204,65 @@ def enforce_cache_size():
             os.remove(file_path)
             total_size -= file_size
 
+# 增加gc命令
+def garbage_collection():
+    cache_dir = get_cache_dir()
+    global_lock = acquire_global_lock(fcntl.LOCK_EX)  # 获取全局写锁
+    
+    try:
+        for prefix in os.listdir(cache_dir):
+            prefix_path = os.path.join(cache_dir, prefix)
+            if os.path.isdir(prefix_path):
+                for suffix in os.listdir(prefix_path):
+                    cache_object_folder = os.path.join(prefix_path, suffix)
+                    if os.path.isdir(cache_object_folder):
+                        cache_files = [f for f in os.listdir(cache_object_folder) if f != LOCK_FILE_NAME]
+                        
+                        # 删除空的缓存目录
+                        if not cache_files:
+                            os.rmdir(cache_object_folder)
+                        
+                        # 保留最新的一个缓存文件
+                        elif len(cache_files) > 1:
+                            cache_files_paths = [os.path.join(cache_object_folder, f) for f in cache_files]
+                            cache_files_paths.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+                            for file_path in cache_files_paths[1:]:
+                                os.remove(file_path)
+                        if not os.listdir(cache_object_folder):
+                            os.rmdir(cache_object_folder)
+    finally:
+        release_global_lock(global_lock)  # 释放全局写锁
+
 # 主函数
 def main():
     if len(sys.argv) < 2:
-        print("Usage: bincache.py <binary> <arguments>")
+        print("Usage: bincache.py <binary> <arguments> or bincache.py --gc")
         sys.exit(1)
-
+    
+    command = sys.argv[1]
+    
+    if command == "--gc":
+        garbage_collection()
+        return
+    
     binary = sys.argv[1]
     args = sys.argv[2:]
     cache_key = generate_initial_hash(binary)
-
     cached_output = get_cached_output(binary, args)
+    
     if cached_output is not None:
         sys.stdout.write(cached_output)
         return
-
+    
     result = subprocess.Popen([binary] + args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = result.communicate()
     stdout = stdout.decode('utf-8')
     stderr = stderr.decode('utf-8')
-
+    
     if result.returncode != 0:
         sys.stderr.write(stderr)
         sys.exit(result.returncode)
-
+    
     cache_output(binary, args, stdout)
     sys.stdout.write(stdout)
 
