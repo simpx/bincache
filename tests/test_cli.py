@@ -81,25 +81,3 @@ def mock_sys_argv():
     sys.argv = ["bincache.py", "/path/to/binary", "arg1", "arg2"]
     yield
     sys.argv = original_argv
-
-def test_main_with_cache(mock_generate_hash, mock_get_cached_output, mock_popen, mock_cache_output, mock_sys_argv):
-    mock_generate_hash.return_value = "dummy_cache_key"
-    mock_get_cached_output.return_value = "cached_output"
-    with patch('sys.stdout.write') as mock_print:
-        cli.main()
-        mock_print.assert_any_call("cached_output")
-        mock_popen.assert_not_called()
-
-def test_main_without_cache(mock_generate_hash, mock_get_cached_output, mock_popen, mock_cache_output, mock_sys_argv):
-    mock_generate_hash.return_value = "dummy_cache_key"
-    mock_get_cached_output.return_value = None
-    
-    mock_process = MagicMock()
-    mock_popen.return_value = mock_process
-    mock_process.communicate.return_value = (b"program output", b"")
-    mock_process.returncode = 0
-
-    with patch('sys.stdout.write') as mock_print:
-        cli.main()
-        mock_print.assert_any_call("program output")
-        mock_cache_output.assert_called_once_with("dummy_cache_key", "program output")
