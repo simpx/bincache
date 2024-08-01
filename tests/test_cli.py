@@ -1,8 +1,12 @@
 import os
 import hashlib
 import subprocess
+import tempfile
 import io
 import pytest
+import shutil
+import multiprocessing
+import time
 import six
 import sys
 from unittest.mock import patch, mock_open, MagicMock
@@ -81,3 +85,109 @@ def mock_sys_argv():
     sys.argv = ["bincache.py", "/path/to/binary", "arg1", "arg2"]
     yield
     sys.argv = original_argv
+
+# Helper function to simulate a binary run
+def run_dummy_binary(output_dir, filename, content):
+    time.sleep(1)  # Simulate some processing delay
+    with open(os.path.join(output_dir, filename), 'w') as f:
+        f.write(content)
+    return content
+
+# Fixture to create and clean a temporary cache directory
+@pytest.fixture
+def temp_cache_dir(monkeypatch):
+    temp_dir = tempfile.mkdtemp()
+    monkeypatch.setenv('BINCACHE_DIR', temp_dir)
+    yield temp_dir
+    shutil.rmtree(temp_dir)
+
+'''
+def test_cache_output_and_retrieval(temp_cache_dir):
+    binary = "/dummy/binary"
+    args = ["arg1", "arg2"]
+    output = "dummy output"
+
+    cli.cache_output(binary, args, output)
+    cached_output = cli.get_cached_output(binary, args)
+
+    assert cached_output == output
+
+def test_cache_directory_structure(temp_cache_dir):
+    binary = "/dummy/binary"
+    args = ["arg1", "arg2"]
+    output = "dummy output"
+
+    cli.cache_output(binary, args, output)
+    cached_output = get_cached_output(binary, args)
+
+    assert os.path.exists(temp_cache_dir)
+    
+    prefix_dir = os.listdir(temp_cache_dir)[0]
+    suffix_dir = os.listdir(os.path.join(temp_cache_dir, prefix_dir))[0]
+    cache_file = os.listdir(os.path.join(temp_cache_dir, prefix_dir, suffix_dir))[0]
+
+    assert cached_output == output
+    assert cache_file != ".lock"
+'''
+
+def test_parse_size():
+    assert cli.parse_size("2G") == 2 * 1024 * 1024 * 1024
+    assert cli.parse_size("1024M") == 1024 * 1024 * 1024
+    assert cli.parse_size("100K") == 100 * 1024
+    assert cli.parse_size("10b") == 10
+
+# Helper function for multiprocessing test
+def cache_in_process(binary, args, output, result_dict, proc_num):
+    result_dict[proc_num] = run_dummy_binary(tempfile.gettempdir(), binary, output)
+    cli.cache_output(binary, args, output)
+
+'''
+def test_multiple_process_locking(temp_cache_dir):
+    binary = "/dummy/binary"
+    args = ["arg1", "arg2"]
+    output = "dummy output from process"
+
+    # Create a manager dictionary to store results from processes
+    manager = multiprocessing.Manager()
+    result_dict = manager.dict()
+
+    # Create multiple processes that will write to the cache simultaneously
+    processes = [multiprocessing.Process(target=cache_in_process, args=(binary, args, f"{output} {i}", result_dict, i)) for i in range(5)]
+
+    for p in processes:
+        p.start()
+
+    for p in processes:
+        p.join()
+
+    # Ensure that cache contains output from at least one of the processes without data corruption
+    cached_output = get_cached_output(binary, args)
+    assert cached_output.startswith(output.split()[0])
+
+    # Verify that each dummy binary run produced the expected results
+    for i in range(5):
+        assert result_dict[i] == f"{output} {i}"
+
+def test_cache_size_enforcement(temp_cache_dir):
+    config_content = "[cache]\nmax_size = 2K\n"
+    with open(os.path.join(temp_cache_dir, 'bincache.conf'), 'w') as config_file:
+        config_file.write(config_content)
+        
+    binary = "/dummy/binary"
+    args = ["arg1", "arg2"]
+
+    # Add multiple outputs to exceed the cache size
+    for i in range(5):
+        output = f"dummy output {i}" + "x" * 500  # Each output ~ 500 bytes
+        cli.cache_output(binary, args + [str(i)], output)
+
+    enforce_cache_size()
+
+    # Verify size enforcement
+    total_size = sum(os.path.getsize(os.path.join(root, f)) for root, _, files in os.walk(temp_cache_dir) for f in files if f != 'bincache.conf')
+    assert total_size <= parse_size('2K')
+
+    # Ensure some of the cache files were removed
+    cached_outputs = sum(1 for root, _, files in os.walk(temp_cache_dir) for f in files if f != 'bincache.conf')
+    assert cached_outputs < 5
+'''
