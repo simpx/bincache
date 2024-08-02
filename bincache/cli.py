@@ -5,15 +5,13 @@ import subprocess
 import pickle
 import io
 import six
-import fcntl
 from configparser import ConfigParser
+from .storage_backend import read_file, write_file, remove_file
 
 # 默认缓存目录和配置文件名
 DEFAULT_CACHE_DIR = os.path.join(os.path.expanduser("~"), '.cache', 'bincache')
 CONFIG_FILE = 'bincache.conf'
 DEFAULT_MAX_SIZE = 5 * 1024 * 1024 * 1024  # 5G
-LOCK_FILE_NAME = '.lock'
-GLOBAL_LOCK_FILE_NAME = 'global.lock'
 
 # 读取配置
 def read_config(cache_dir):
@@ -43,7 +41,7 @@ def get_cache_dir():
 # 根据文件路径和文件名生成摘要
 def generate_initial_hash(path):
     hasher = hashlib.sha256()
-    hasher.update(six.b(path))
+    hasher.update(six.ensure_binary(path))
     return hasher.hexdigest()
 
 # 获取缓存文件路径
@@ -67,11 +65,11 @@ def md5(file_path):
 def get_dynamic_libs(binary):
     result = subprocess.Popen(['ldd', binary], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = result.communicate()
-    
+
     if result.returncode != 0:
-        print("Failed to get dynamic libraries for {}".format(binary))
+        print(f"Failed to get dynamic libraries for {binary}")
         sys.exit(1)
-    
+
     libs = []
     for line in stdout.decode('utf-8').splitlines():
         if '=>' in line:
@@ -84,7 +82,7 @@ def get_dynamic_libs(binary):
             lib_path = line.split()[0].strip()
             if lib_path:
                 libs.append(lib_path)
-    
+
     return libs
 
 # 文件信息
@@ -97,66 +95,29 @@ def generate_hash(binary, args):
     libs = get_dynamic_libs(binary)
     libs_info = [(lib, os.path.getmtime(lib)) for lib in libs]
     hash_data = str(binary_info) + str(libs_info) + " ".join(args)
-    return hashlib.sha256(six.b(hash_data)).hexdigest()
-
-# 锁定函数
-def acquire_lock(lock_file_path, lock_type):
-    lock_file = open(lock_file_path, 'w')
-    fcntl.flock(lock_file, lock_type)
-    return lock_file
-
-def release_lock(lock_file):
-    fcntl.flock(lock_file, fcntl.LOCK_UN)
-    lock_file.close()
-    
-# 全局锁定函数
-def acquire_global_lock(lock_type):
-    lock_file_path = os.path.join(get_cache_dir(), GLOBAL_LOCK_FILE_NAME)
-    lock_file = open(lock_file_path, 'w')
-    fcntl.flock(lock_file, lock_type)
-    return lock_file
-
-def release_global_lock(lock_file):
-    fcntl.flock(lock_file, fcntl.LOCK_UN)
-    lock_file.close()
+    return hashlib.sha256(six.ensure_binary(hash_data)).hexdigest()
 
 # 缓存输出
 def cache_output(binary, args, output):
     cache_file = get_cache_file_path(binary, args)
     cache_object_folder = os.path.dirname(cache_file)
     os.makedirs(cache_object_folder, exist_ok=True)
-    lock_file_path = os.path.join(cache_object_folder, LOCK_FILE_NAME)
-    
-    global_lock = acquire_global_lock(fcntl.LOCK_SH)  # 获取全局读锁
-    lock_file = acquire_lock(lock_file_path, fcntl.LOCK_EX)
     
     try:
-        with io.open(cache_file, 'wb') as f:
-            pickle.dump(output, f)
+        data = pickle.dumps(output)
+        write_file(cache_file, data)
         enforce_cache_size()
-    finally:
-        release_lock(lock_file)
-        release_global_lock(global_lock)  # 释放全局读锁
+    except Exception as e:
+        print(f"Error caching output: {e}")
 
 # 获取缓存输出
 def get_cached_output(binary, args):
     cache_file = get_cache_file_path(binary, args)
-    cache_object_folder = os.path.dirname(cache_file)
-    lock_file_path = os.path.join(cache_object_folder, LOCK_FILE_NAME)
     
-    global_lock = acquire_global_lock(fcntl.LOCK_SH)  # 获取全局读锁
+    data = read_file(cache_file)
+    if data:
+        return pickle.loads(data)
     
-    try:
-        if os.path.exists(cache_file):
-            lock_file = acquire_lock(lock_file_path, fcntl.LOCK_SH)
-            try:
-                with io.open(cache_file, 'rb') as f:
-                    return pickle.load(f)
-            finally:
-                release_lock(lock_file)
-    finally:
-        release_global_lock(global_lock)  # 释放全局读锁
-        
     return None
 
 # 强制缓存大小
@@ -175,14 +136,13 @@ def enforce_cache_size():
                     folder_size = 0
                     folder_files = []
                     for f in os.listdir(cache_object_folder):
-                        if f == LOCK_FILE_NAME:
-                            continue
                         file_path = os.path.join(cache_object_folder, f)
-                        file_size = os.path.getsize(file_path)
-                        total_size += file_size
-                        folder_size += file_size
-                        last_access_time = os.path.getatime(file_path)
-                        folder_files.append((last_access_time, file_size, file_path))
+                        if os.path.isfile(file_path):
+                            file_size = os.path.getsize(file_path)
+                            total_size += file_size
+                            folder_size += file_size
+                            last_access_time = os.path.getatime(file_path)
+                            folder_files.append((last_access_time, file_size, file_path))
                     folders_with_files.append((folder_size, folder_files, cache_object_folder))
     if total_size <= max_size:
         return
@@ -193,21 +153,19 @@ def enforce_cache_size():
         
         if len(folder_files) > 1:
             folder_files.sort()
-            with acquire_lock(os.path.join(cache_object_folder, LOCK_FILE_NAME), fcntl.LOCK_EX) as lock_file:
-                for _, file_size, file_path in folder_files:
-                    os.remove(file_path)
-                    total_size -= file_size
-                    if total_size <= max_size:
-                        break
+            for _, file_size, file_path in folder_files:
+                remove_file(file_path)
+                total_size -= file_size
+                if total_size <= max_size:
+                    break
         else:
             _, file_size, file_path = folder_files[0]
-            os.remove(file_path)
+            remove_file(file_path)
             total_size -= file_size
 
 # 增加gc命令
 def garbage_collection():
     cache_dir = get_cache_dir()
-    global_lock = acquire_global_lock(fcntl.LOCK_EX)  # 获取全局写锁
     
     try:
         for prefix in os.listdir(cache_dir):
@@ -216,7 +174,7 @@ def garbage_collection():
                 for suffix in os.listdir(prefix_path):
                     cache_object_folder = os.path.join(prefix_path, suffix)
                     if os.path.isdir(cache_object_folder):
-                        cache_files = [f for f in os.listdir(cache_object_folder) if f != LOCK_FILE_NAME]
+                        cache_files = [f for f in os.listdir(cache_object_folder) if os.path.isfile(os.path.join(cache_object_folder, f))]
                         
                         # 删除空的缓存目录
                         if not cache_files:
@@ -227,11 +185,11 @@ def garbage_collection():
                             cache_files_paths = [os.path.join(cache_object_folder, f) for f in cache_files]
                             cache_files_paths.sort(key=lambda p: os.path.getmtime(p), reverse=True)
                             for file_path in cache_files_paths[1:]:
-                                os.remove(file_path)
+                                remove_file(file_path)
                         if not os.listdir(cache_object_folder):
                             os.rmdir(cache_object_folder)
-    finally:
-        release_global_lock(global_lock)  # 释放全局写锁
+    except Exception as e:
+        print(f"Garbage collection failed: {e}")
 
 # 主函数
 def main():
