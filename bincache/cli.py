@@ -4,7 +4,6 @@ import hashlib
 import subprocess
 import pickle
 import io
-import six
 from configparser import ConfigParser
 from .storage_backend import read_file, write_file, remove_file
 
@@ -41,7 +40,7 @@ def get_cache_dir():
 # 根据文件路径和文件名生成摘要
 def generate_initial_hash(path):
     hasher = hashlib.sha256()
-    hasher.update(six.ensure_binary(path))
+    hasher.update(path.encode('utf-8'))
     return hasher.hexdigest()
 
 # 获取缓存文件路径
@@ -95,7 +94,7 @@ def generate_hash(binary, args):
     libs = get_dynamic_libs(binary)
     libs_info = [(lib, os.path.getmtime(lib)) for lib in libs]
     hash_data = str(binary_info) + str(libs_info) + " ".join(args)
-    return hashlib.sha256(six.ensure_binary(hash_data)).hexdigest()
+    return hashlib.sha256(hash_data.encode('utf-8')).hexdigest()
 
 # 缓存输出
 def cache_output(binary, args, output):
