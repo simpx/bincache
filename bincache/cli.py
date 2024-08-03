@@ -133,21 +133,18 @@ def cache_put(cache_key, output):
         return
     cache_file_folder = os.path.dirname(cache_file_path)
     os.makedirs(cache_file_folder, exist_ok=True)
-    try:
-        if config['temporary_dir']:
-            os.makedirs(config['temporary_dir'], exist_ok=True)
-            with tempfile.NamedTemporaryFile(delete=False, dir=config['temporary_dir']) as temp_file:
-                temp_path = temp_file.name
-                pickle.dump(output, temp_file)
-            try:
-                os.rename(temp_path, cache_file_path)
-            finally:
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
-        else:
-            pickle.dump(output, cache_file_path)
-    except Exception as e:
-        pass
+    if config['temporary_dir']:
+        os.makedirs(config['temporary_dir'], exist_ok=True)
+        with tempfile.NamedTemporaryFile(delete=False, dir=config['temporary_dir']) as temp_file:
+            temp_path = temp_file.name
+            pickle.dump(output, temp_file)
+        try:
+            os.rename(temp_path, cache_file_path)
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+    else:
+        pickle.dump(output, cache_file_path)
 
 def cache_get(cache_key):
     if not cache_key:
@@ -185,8 +182,10 @@ if __name__ == "__main__":
         stdout = stdout.decode('utf-8')
         stderr = stderr.decode('utf-8')
         if result.returncode == 0 and not stderr:
-            cache_put(cache_key, stdout)
-
+            try:
+                cache_put(cache_key, stdout)
+            except Exception as e:
+                pass
         sys.stdout.write(stdout)
         sys.stderr.write(stderr)
         sys.exit(result.returncode)
