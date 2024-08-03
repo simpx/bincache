@@ -109,17 +109,14 @@ def generate_cache_key(binary, args):
     hash_data = str(binary_info) + str(libs_info) + " ".join(args)
     return hashlib.md5(hash_data.encode('utf-8')).hexdigest()
 
-def get_cache_file_path(binary, args):
-    cache_key = generate_cache_key(binary, args)
-    if cache_key is None:
-        return None
+def get_cache_file_path(cache_key):
     prefix = cache_key[:2]
     filename = cache_key[2:]
     cache_file_folder = os.path.join(CACHE_DIR, prefix)
     return os.path.join(cache_file_folder, filename)
 
-def cache_output(binary, args, output):
-    cache_file_path = get_cache_file_path(binary, args)
+def cache_output(cache_key, output):
+    cache_file_path = get_cache_file_path(cache_key)
     if cache_file_path is None:
         return
     cache_file_folder = os.path.dirname(cache_file_path)
@@ -136,8 +133,8 @@ def cache_output(binary, args, output):
     except Exception as e:
         pass
 
-def get_cached_output(binary, args):
-    cache_file_path = get_cache_file_path(binary, args)
+def get_cached_output(cache_key):
+    cache_file_path = get_cache_file_path(cache_key)
     if not cache_file_path:
         return None
     try:
@@ -154,35 +151,26 @@ def find_binary(command):
         sys.exit(1)
     return binary_path
 
-def main():
+if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: bincache <binary_or_command> <arguments>")
         sys.exit(1)
-    
-    command = sys.argv[1]
-    
-    binary = find_binary(command)
+    binary = find_binary(sys.argv[1])
     args = sys.argv[2:]
-
-    cached_output = get_cached_output(binary, args)
-    
+    cache_key = generate_cache_key(binary, args)
+    cached_output = get_cached_output(cache_key)
     if cached_output is not None:
         sys.stdout.write(cached_stdout)
         return
     
-    result = subprocess.Popen([binary] + args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    result = subprocess.Popen(sys.argv[1:], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = result.communicate()
     stdout = stdout.decode('utf-8')
     stderr = stderr.decode('utf-8')
-    
-    # Don't cache if there was stderr, even if returncode was 0
-    if result.returncode != 0 or stderr:
-        sys.stdout.write(stdout)
-        sys.stderr.write(stderr)
-        sys.exit(result.returncode)
-    else:
-        cache_output(binary, args, stdout)
-        sys.stdout.write(stdout)
 
-if __name__ == "__main__":
-    main()
+    if result.returncode == 0 and not stderr:
+        cache_output(cache_key, stdout)
+    
+    sys.stdout.write(stdout)
+    sys.stderr.write(stderr)
+    sys.exit(result.returncode)
