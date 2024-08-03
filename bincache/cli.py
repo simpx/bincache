@@ -85,7 +85,7 @@ def get_dynamic_libs(binary):
     stdout, stderr = result.communicate()
     if result.returncode != 0:
         print(f"Failed to get dynamic libraries for {binary}")
-        sys.exit(1)
+        return None
     libs = []
     for line in stdout.decode('utf-8').splitlines():
         if '=>' in line:
@@ -103,12 +103,16 @@ def get_dynamic_libs(binary):
 def generate_cache_key(binary, args):
     binary_info = hash_file_md5(binary) 
     libs = get_dynamic_libs(binary)
+    if libs is None:
+        return None
     libs_info = [(lib, os.path.getmtime(lib)) for lib in libs]
     hash_data = str(binary_info) + str(libs_info) + " ".join(args)
     return hashlib.md5(hash_data.encode('utf-8')).hexdigest()
 
 def get_cache_file_path(binary, args):
     cache_key = generate_cache_key(binary, args)
+    if cache_key is None:
+        return None
     prefix = cache_key[:2]
     filename = cache_key[2:]
     cache_file_folder = os.path.join(CACHE_DIR, prefix)
@@ -116,6 +120,8 @@ def get_cache_file_path(binary, args):
 
 def cache_output(binary, args, output):
     cache_file_path = get_cache_file_path(binary, args)
+    if cache_file_path is None:
+        return
     cache_file_folder = os.path.dirname(cache_file_path)
     os.makedirs(cache_file_folder, exist_ok=True)
     try:
@@ -131,9 +137,11 @@ def cache_output(binary, args, output):
         pass
 
 def get_cached_output(binary, args):
-    cache_file = get_cache_file_path(binary, args)
+    cache_file_path = get_cache_file_path(binary, args)
+    if not cache_file_path:
+        return None
     try:
-        with open(cache_file, 'rb') as f:
+        with open(cache_file_path, 'rb') as f:
             data = f.read()
             return pickle.loads(data)
     except FileNotFoundError:
