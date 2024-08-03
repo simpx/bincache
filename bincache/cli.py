@@ -171,11 +171,13 @@ def main():
     stderr = stderr.decode('utf-8')
     
     if result.returncode != 0:
+        sys.stdout.write(stdout)
         sys.stderr.write(stderr)
         sys.exit(result.returncode)
-    
-    cache_output(binary, args, stdout)
-    sys.stdout.write(stdout)
+    else:
+        cache_output(binary, args, stdout)
+        sys.stdout.write(stdout)
+        sys.stderr.write(stderr)
 
 if __name__ == "__main__":
     main()
