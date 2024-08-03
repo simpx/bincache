@@ -20,16 +20,17 @@ if __name__ == "__main__":
     cached_output = get(cache_key)
     if cached_output is not None:
         sys.stdout.write(cached_output)
-    else:
-        result = subprocess.Popen(sys.argv[1:], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        stdout, stderr = result.communicate()
-        stdout = stdout.decode('utf-8')
-        stderr = stderr.decode('utf-8')
-        if result.returncode == 0 and not stderr:
-            try:
-                put(cache_key, stdout)
-            except Exception as e:
-                pass
-        sys.stdout.write(stdout)
-        sys.stderr.write(stderr)
-        sys.exit(result.returncode)
+        sys.exit()
+
+    result = subprocess.Popen(sys.argv[1:], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stdout, stderr = result.communicate()
+    stdout = stdout.decode('utf-8')
+    stderr = stderr.decode('utf-8')
+    if result.returncode == 0 and not stderr:
+        try:
+            put(cache_key, stdout)
+        except Exception as e:
+            pass
+    sys.stdout.write(stdout)
+    sys.stderr.write(stderr)
+    sys.exit(result.returncode)
