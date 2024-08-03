@@ -2,6 +2,7 @@ import os
 import sys
 import hashlib
 import subprocess
+import tempfile
 import pickle
 import shutil
 from configparser import ConfigParser
@@ -34,8 +35,10 @@ def read_config(config_file):
         'temporary_dir': DEFAULT_TEMPORARY_DIR
     }
     if os.path.exists(config_file):
+        with open(config_file, 'r') as f:
+            config_string = f"[DEFAULT]\n" + f.read()
         config = ConfigParser(allow_no_value=True)
-        config.read(config_file)
+        config.read_string(config_string)
         if config.has_option('DEFAULT', 'max_size'):
             config_params['max_size'] = parse_size(config.get('DEFAULT', 'max_size'))
         if config.has_option('DEFAULT', 'log_file'):
@@ -72,11 +75,13 @@ def remove_file(file_path):
     except FileNotFoundError:
         pass
 
-
 def hash_file_md5(file_path):
     md5 = hashlib.md5()
     with open(file_path, 'rb') as f:
-        while chunk := f.read(8192):
+        while True:
+            chunk = f.read(8192)
+            if not chunk:
+                break
             md5.update(chunk)
     return md5.hexdigest()
 
@@ -133,11 +138,12 @@ def cache_put(cache_key, output):
     cache_file_folder = os.path.dirname(cache_file_path)
     os.makedirs(cache_file_folder, exist_ok=True)
     try:
+        os.makedirs(config['temporary_dir'], exist_ok=True)
         with tempfile.NamedTemporaryFile(delete=False, dir=config['temporary_dir']) as temp_file:
             temp_path = temp_file.name
             pickle.dump(output, temp_file)
         try:
-            os.rename(temp_path, file_path)
+            os.rename(temp_path, cache_file_path)
         finally:
             if os.path.exists(temp_path):
                 os.remove(temp_path)
@@ -173,7 +179,7 @@ if __name__ == "__main__":
     cache_key = generate_cache_key(binary, args)
     cached_output = cache_get(cache_key)
     if cached_output is not None:
-        sys.stdout.write(cached_stdout)
+        sys.stdout.write(cached_output)
     else:
         result = subprocess.Popen(sys.argv[1:], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = result.communicate()
