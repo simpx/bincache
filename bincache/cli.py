@@ -1,4 +1,3 @@
-import logging
 import os
 import sys
 import hashlib
@@ -6,86 +5,12 @@ import subprocess
 import tempfile
 import pickle
 import shutil
-from configparser import ConfigParser
 
-DEFAULT_CACHE_DIR = os.path.join(os.path.expanduser("~"), '.cache', 'bincache')
-DEFAULT_MAX_SIZE = 5 * 1024 * 1024 * 1024  # 5G
-DEFAULT_LOG_FILE = ""
-DEFAULT_LOG_LEVEL = "INFO"
-DEFAULT_STATS = False
-CACHE_DIR = os.getenv('BINCACHE_DIR', DEFAULT_CACHE_DIR)
-DEFAULT_TEMPORARY_DIR = os.path.join(CACHE_DIR, 'tmp')
-CONFIG_FILE = 'bincache.conf'
-
-def parse_size(size_str):
-    size_str = size_str.upper()
-    units = {"B": 1, "K": 1024, "M": 1024**2, "G": 1024**3}
-    for unit in units:
-        if size_str.endswith(unit):
-            return int(size_str[:-1]) * units[unit]
-    return int(size_str)
-
-def read_config(config_file):
-    config_params = {
-        'max_size': DEFAULT_MAX_SIZE,
-        'log_file': DEFAULT_LOG_FILE,
-        'log_level': DEFAULT_LOG_LEVEL,
-        'stats': DEFAULT_STATS,
-        'temporary_dir': DEFAULT_TEMPORARY_DIR
-    }
-    if os.path.exists(config_file):
-        with open(config_file, 'r') as f:
-            config_string = f"[DEFAULT]\n" + f.read()
-        config = ConfigParser(allow_no_value=True)
-        config.read_string(config_string)
-        if config.has_option('DEFAULT', 'max_size'):
-            config_params['max_size'] = parse_size(config.get('DEFAULT', 'max_size'))
-        if config.has_option('DEFAULT', 'log_file'):
-            log_file = config.get('DEFAULT', 'log_file')
-            if not os.path.isabs(log_file) and not log_file.startswith('.' + os.sep):
-                log_file = os.path.join(CACHE_DIR, log_file)
-            config_params['log_file'] = log_file
-        if config.has_option('DEFAULT', 'log_level'):
-            config_params['log_level'] = config.get('DEFAULT', 'log_level').upper()
-        if config.has_option('DEFAULT', 'stats'):
-            config_params['stats'] = config.getboolean('DEFAULT', 'stats')
-        if config.has_option('DEFAULT', 'temporary_dir'):
-            config_params['temporary_dir'] = config.get('DEFAULT', 'temporary_dir')
-    return config_params
+from .config import read_config
+from .log import get_logger
 
 config = read_config(os.path.join(CACHE_DIR, CONFIG_FILE))
-logger = logging.getLogger('bincache')
-log_level = getattr(logging, config['log_level'], logging.INFO)
-logger.setLevel(log_level)
-if config['log_file']:
-    log_handler = logging.FileHandler(config['log_file'])
-    log_formatter = logging.Formatter('%(asctime)s - PID: %(process)d - PWD: %(pathname)s - %(message)s')
-    log_handler.setFormatter(log_formatter)
-    logger.addHandler(log_handler)
-
-##################
-# File Operation #
-##################
-def read_file(file_path):
-    try:
-        with open(file_path, 'rb') as f:
-            return f.read()
-    except FileNotFoundError:
-        return None
-
-def write_file(file_path, data):
-    """Write data to a file using a temporary file and then renaming it to ensure atomicity."""
-    temp_path = file_path + ".tmp"
-    with open(temp_path, 'wb') as f:
-        f.write(data)
-    os.rename(temp_path, file_path)
-
-def remove_file(file_path):
-    """Remove a file if it exists."""
-    try:
-        os.remove(file_path)
-    except FileNotFoundError:
-        pass
+logger = get_logger(config)
 
 def hash_file_md5(file_path):
     md5 = hashlib.md5()
