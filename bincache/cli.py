@@ -3,7 +3,7 @@ import sys
 import hashlib
 import subprocess
 import pickle
-import io
+import shutil
 from configparser import ConfigParser
 from .storage_backend import read_file, write_file, remove_file
 
@@ -12,7 +12,6 @@ DEFAULT_CACHE_DIR = os.path.join(os.path.expanduser("~"), '.cache', 'bincache')
 DEFAULT_MAX_SIZE = 5 * 1024 * 1024 * 1024  # 5G
 DEFAULT_LOG_FILE = ""
 DEFAULT_STATS = False
-
 CACHE_DIR = os.getenv('BINCACHE_DIR', DEFAULT_CACHE_DIR)
 CONFIG_FILE = 'bincache.conf'
 
@@ -41,21 +40,6 @@ def read_config(config_file):
 
 config = read_config(os.path.join(CACHE_DIR, CONFIG_FILE))
 
-# 根据文件路径和文件名生成摘要
-def generate_initial_hash(path):
-    hasher = hashlib.sha256()
-    hasher.update(path.encode('utf-8'))
-    return hasher.hexdigest()
-
-# 获取缓存文件路径
-def get_cache_file_path(binary, args):
-    hash1 = generate_initial_hash(binary)
-    prefix = hash1[:2]
-    suffix = hash1[2:]
-    cache_object_folder = os.path.join(CACHE_DIR, prefix, suffix)
-    cache_key = generate_hash(binary, args)
-    return os.path.join(cache_object_folder, cache_key)
-
 def hash_file_md5(file_path):
     md5 = hashlib.md5()
     with open(file_path, 'rb') as f:
@@ -63,15 +47,12 @@ def hash_file_md5(file_path):
             md5.update(chunk)
     return md5.hexdigest()
 
-# 动态库信息
 def get_dynamic_libs(binary):
     result = subprocess.Popen(['ldd', binary], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = result.communicate()
-
     if result.returncode != 0:
         print(f"Failed to get dynamic libraries for {binary}")
         sys.exit(1)
-
     libs = []
     for line in stdout.decode('utf-8').splitlines():
         if '=>' in line:
@@ -84,18 +65,23 @@ def get_dynamic_libs(binary):
             lib_path = line.split()[0].strip()
             if lib_path:
                 libs.append(lib_path)
-
     return libs
 
-# 生成hash
-def generate_hash(binary, args):
-    binary_info = hash_file_md5(binary)
+def generate_cache_key(binary, args):
+    binary_info = hash_file_md5(binary) 
     libs = get_dynamic_libs(binary)
     libs_info = [(lib, os.path.getmtime(lib)) for lib in libs]
     hash_data = str(binary_info) + str(libs_info) + " ".join(args)
-    return hashlib.sha256(hash_data.encode('utf-8')).hexdigest()
+    return hashlib.md5(hash_data.encode('utf-8')).hexdigest()
 
-# 缓存输出
+def get_cache_file_path(binary, args):
+    cache_key = generate_cache_key(binary, args)
+    prefix = cache_key[:2]
+    suffix = cache_key[2:4]
+    filename = cache_key[4:]
+    cache_object_folder = os.path.join(CACHE_DIR, prefix, suffix)
+    return os.path.join(cache_object_folder, filename)
+
 def cache_output(binary, args, output):
     cache_file = get_cache_file_path(binary, args)
     cache_object_folder = os.path.dirname(cache_file)
@@ -108,17 +94,13 @@ def cache_output(binary, args, output):
     except Exception as e:
         print(f"Error caching output: {e}")
 
-# 获取缓存输出
 def get_cached_output(binary, args):
     cache_file = get_cache_file_path(binary, args)
-    
     data = read_file(cache_file)
     if data:
         return pickle.loads(data)
-    
     return None
 
-# 强制缓存大小
 def enforce_cache_size():
     cache_dir = CACHE_DIR
     max_size = config['max_size']
@@ -147,7 +129,7 @@ def enforce_cache_size():
     for folder_size, folder_files, cache_object_folder in folders_with_files:
         if total_size <= max_size:
             break
-        
+
         if len(folder_files) > 1:
             folder_files.sort()
             for _, file_size, file_path in folder_files:
@@ -160,10 +142,8 @@ def enforce_cache_size():
             remove_file(file_path)
             total_size -= file_size
 
-# 增加gc命令
 def garbage_collection():
     cache_dir = CACHE_DIR
-    
     try:
         for prefix in os.listdir(cache_dir):
             prefix_path = os.path.join(cache_dir, prefix)
@@ -172,11 +152,9 @@ def garbage_collection():
                     cache_object_folder = os.path.join(prefix_path, suffix)
                     if os.path.isdir(cache_object_folder):
                         cache_files = [f for f in os.listdir(cache_object_folder) if os.path.isfile(os.path.join(cache_object_folder, f))]
-                        
                         # 删除空的缓存目录
                         if not cache_files:
                             os.rmdir(cache_object_folder)
-                        
                         # 保留最新的一个缓存文件
                         elif len(cache_files) > 1:
                             cache_files_paths = [os.path.join(cache_object_folder, f) for f in cache_files]
@@ -188,7 +166,13 @@ def garbage_collection():
     except Exception as e:
         print(f"Garbage collection failed: {e}")
 
-# 主函数
+def find_binary(command):
+    binary_path = shutil.which(command)
+    if binary_path is None:
+        print(f"Command {command} not found")
+        sys.exit(1)
+    return binary_path
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: bincache.py <binary> <arguments> or bincache.py --gc")
@@ -200,9 +184,9 @@ def main():
         garbage_collection()
         return
     
-    binary = sys.argv[1]
+    binary = find_binary(command)
     args = sys.argv[2:]
-    cache_key = generate_initial_hash(binary)
+
     cached_output = get_cached_output(binary, args)
     
     if cached_output is not None:
