@@ -7,10 +7,12 @@ import io
 from configparser import ConfigParser
 from .storage_backend import read_file, write_file, remove_file
 
-# 默认缓存目录和配置文件名
+# Cache directory, default ~/.cache/bincache
 DEFAULT_CACHE_DIR = os.path.join(os.path.expanduser("~"), '.cache', 'bincache')
-CONFIG_FILE = 'bincache.conf'
 DEFAULT_MAX_SIZE = 5 * 1024 * 1024 * 1024  # 5G
+
+CACHE_DIR = os.getenv('BINCACHE_DIR', DEFAULT_CACHE_DIR)
+CONFIG_FILE = 'bincache.conf'
 
 # 读取配置
 def read_config(cache_dir):
@@ -32,11 +34,6 @@ def parse_size(size_str):
         if size_str.endswith(unit):
             return int(size_str[:-1]) * units[unit]
     return int(size_str)
-
-# 获取缓存目录
-def get_cache_dir():
-    return os.getenv('BINCACHE_DIR', DEFAULT_CACHE_DIR)
-
 # 根据文件路径和文件名生成摘要
 def generate_initial_hash(path):
     hasher = hashlib.sha256()
@@ -48,7 +45,7 @@ def get_cache_file_path(binary, args):
     hash1 = generate_initial_hash(binary)
     prefix = hash1[:2]
     suffix = hash1[2:]
-    cache_object_folder = os.path.join(get_cache_dir(), prefix, suffix)
+    cache_object_folder = os.path.join(CACHE_DIR, prefix, suffix)
     cache_key = generate_hash(binary, args)
     return os.path.join(cache_object_folder, cache_key)
 
@@ -121,7 +118,7 @@ def get_cached_output(binary, args):
 
 # 强制缓存大小
 def enforce_cache_size():
-    cache_dir = get_cache_dir()
+    cache_dir = CACHE_DIR
     config = read_config(cache_dir)
     max_size = config['max_size']
     total_size = 0
@@ -164,7 +161,7 @@ def enforce_cache_size():
 
 # 增加gc命令
 def garbage_collection():
-    cache_dir = get_cache_dir()
+    cache_dir = CACHE_DIR
     
     try:
         for prefix in os.listdir(cache_dir):
