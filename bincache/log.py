@@ -1,6 +1,9 @@
 import logging
+from .config import get_config
 
-def get_logger(config):
+config = get_config()
+
+def get_logger():
     logger = logging.getLogger('bincache')
     log_level = getattr(logging, config['log_level'], logging.INFO)
     logger.setLevel(log_level)

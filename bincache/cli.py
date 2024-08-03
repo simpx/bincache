@@ -6,11 +6,11 @@ import tempfile
 import pickle
 import shutil
 
-from .config import read_config
+from .config import get_config
 from .log import get_logger
 
-config = read_config(os.path.join(CACHE_DIR, CONFIG_FILE))
-logger = get_logger(config)
+config = get_config()
+logger = get_logger()
 
 def hash_file_md5(file_path):
     md5 = hashlib.md5()
