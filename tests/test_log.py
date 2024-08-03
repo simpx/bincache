@@ -11,8 +11,7 @@ import bincache.log as log_module
 # 重置 _logger
 @pytest.fixture(autouse=True)
 def reset_logger():
-    bincache_config._config = None
-    bincache_log._log = None
+    bincache_log._logger = None
 
 def test_get_logger_default_config():
     """测试 get_logger 函数在默认配置下的行为"""
