@@ -1,13 +1,12 @@
 import logging
-from config import get_config
+from bincache.config import get_config
 
-config = get_config()
-
-_logger
+_logger = None
 
 def get_logger():
     global _logger
     if _logger is None:
+        config = get_config()
         _logger = logging.getLogger('bincache')
         log_level = getattr(logging, config['log_level'], logging.INFO)
         _logger.setLevel(log_level)
