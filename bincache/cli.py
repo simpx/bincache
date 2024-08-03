@@ -80,6 +80,9 @@ def hash_file_md5(file_path):
             md5.update(chunk)
     return md5.hexdigest()
 
+'''
+return list of ('libname, 'libpath', 'address') or None
+'''
 def get_dynamic_libs(binary):
     result = subprocess.Popen(['ldd', binary], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = result.communicate()
@@ -88,24 +91,32 @@ def get_dynamic_libs(binary):
         return None
     libs = []
     for line in stdout.decode('utf-8').splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        name, path, address = "", "", ""
+        if '(' in line and ')' in line:
+            address_start = line.index('(') + 1
+            address_end = line.index(')')
+            address = line[address_start:address_end].strip()
+            line = line[:address_start - 1].strip()
         if '=>' in line:
             parts = line.split('=>')
-            if len(parts) > 1:
-                lib_path = parts[1].split('(')[0].strip()
-                if lib_path:
-                    libs.append(lib_path)
+            name = parts[0].strip()
+            path = parts[1].strip()
         else:
-            lib_path = line.split()[0].strip()
-            if lib_path:
-                libs.append(lib_path)
+            path = line.strip()
+        libs.append((name, path, address))
     return libs
 
 def generate_cache_key(binary, args):
+    if not binary:
+        return None
     binary_info = hash_file_md5(binary) 
     libs = get_dynamic_libs(binary)
     if libs is None:
         return None
-    libs_info = [(lib, os.path.getmtime(lib)) for lib in libs]
+    libs_info = [(libname, hash_file_md5(libpath)) for libname, libpath, address in libs if libpath]
     hash_data = str(binary_info) + str(libs_info) + " ".join(args)
     return hashlib.md5(hash_data.encode('utf-8')).hexdigest()
 
@@ -115,7 +126,7 @@ def get_cache_file_path(cache_key):
     cache_file_folder = os.path.join(CACHE_DIR, prefix)
     return os.path.join(cache_file_folder, filename)
 
-def cache_output(cache_key, output):
+def cache_put(cache_key, output):
     cache_file_path = get_cache_file_path(cache_key)
     if cache_file_path is None:
         return
@@ -133,7 +144,9 @@ def cache_output(cache_key, output):
     except Exception as e:
         pass
 
-def get_cached_output(cache_key):
+def cache_get(cache_key):
+    if not cache_key:
+        return None
     cache_file_path = get_cache_file_path(cache_key)
     if not cache_file_path:
         return None
@@ -148,7 +161,7 @@ def find_binary(command):
     binary_path = shutil.which(command)
     if binary_path is None:
         print(f"Binary or Command {command} not found")
-        sys.exit(1)
+        return None
     return binary_path
 
 if __name__ == "__main__":
@@ -158,19 +171,17 @@ if __name__ == "__main__":
     binary = find_binary(sys.argv[1])
     args = sys.argv[2:]
     cache_key = generate_cache_key(binary, args)
-    cached_output = get_cached_output(cache_key)
+    cached_output = cache_get(cache_key)
     if cached_output is not None:
         sys.stdout.write(cached_stdout)
-        return
-    
-    result = subprocess.Popen(sys.argv[1:], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout, stderr = result.communicate()
-    stdout = stdout.decode('utf-8')
-    stderr = stderr.decode('utf-8')
+    else:
+        result = subprocess.Popen(sys.argv[1:], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = result.communicate()
+        stdout = stdout.decode('utf-8')
+        stderr = stderr.decode('utf-8')
+        if result.returncode == 0 and not stderr:
+            cache_put(cache_key, stdout)
 
-    if result.returncode == 0 and not stderr:
-        cache_output(cache_key, stdout)
-    
-    sys.stdout.write(stdout)
-    sys.stderr.write(stderr)
-    sys.exit(result.returncode)
+        sys.stdout.write(stdout)
+        sys.stderr.write(stderr)
+        sys.exit(result.returncode)
