@@ -7,16 +7,12 @@ import pickle
 import shutil
 from configparser import ConfigParser
 
-#################
-# Configuration #
-#################
-# Cache directory, default ~/.cache/bincache
 DEFAULT_CACHE_DIR = os.path.join(os.path.expanduser("~"), '.cache', 'bincache')
 DEFAULT_MAX_SIZE = 5 * 1024 * 1024 * 1024  # 5G
 DEFAULT_LOG_FILE = ""
 DEFAULT_STATS = False
 CACHE_DIR = os.getenv('BINCACHE_DIR', DEFAULT_CACHE_DIR)
-DEFAULT_TEMPORARY_DIR = os.path.join(CACHE_DIR, 'temporary_dir')
+DEFAULT_TEMPORARY_DIR = os.path.join(CACHE_DIR, 'tmp')
 CONFIG_FILE = 'bincache.conf'
 
 def parse_size(size_str):
@@ -138,15 +134,18 @@ def cache_put(cache_key, output):
     cache_file_folder = os.path.dirname(cache_file_path)
     os.makedirs(cache_file_folder, exist_ok=True)
     try:
-        os.makedirs(config['temporary_dir'], exist_ok=True)
-        with tempfile.NamedTemporaryFile(delete=False, dir=config['temporary_dir']) as temp_file:
-            temp_path = temp_file.name
-            pickle.dump(output, temp_file)
-        try:
-            os.rename(temp_path, cache_file_path)
-        finally:
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
+        if config['temporary_dir']:
+            os.makedirs(config['temporary_dir'], exist_ok=True)
+            with tempfile.NamedTemporaryFile(delete=False, dir=config['temporary_dir']) as temp_file:
+                temp_path = temp_file.name
+                pickle.dump(output, temp_file)
+            try:
+                os.rename(temp_path, cache_file_path)
+            finally:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+        else:
+            pickle.dump(output, cache_file_path)
     except Exception as e:
         pass
 
