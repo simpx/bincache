@@ -10,7 +10,7 @@ CACHE_DIR = os.getenv('BINCACHE_DIR', DEFAULT_CACHE_DIR)
 DEFAULT_TEMPORARY_DIR = os.path.join(CACHE_DIR, 'tmp')
 CONFIG_FILE = 'bincache.conf'
 
-g_config = None
+_config = None
 
 def parse_size(size_str):
     size_str = size_str.upper()
@@ -21,8 +21,8 @@ def parse_size(size_str):
     return int(size_str)
 
 def get_config():
-    global g_config
-    if not g_config:
+    global _config
+    if not _config:
         config_file = os.path.join(CACHE_DIR, CONFIG_FILE)
         config_params = {
             'max_size': DEFAULT_MAX_SIZE,
@@ -49,5 +49,5 @@ def get_config():
                 config_params['stats'] = config.getboolean('DEFAULT', 'stats')
             if config.has_option('DEFAULT', 'temporary_dir'):
                 config_params['temporary_dir'] = config.get('DEFAULT', 'temporary_dir')
-        g_config = config_params
-    return g_config
+        _config = config_params
+    return _config
