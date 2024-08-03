@@ -10,30 +10,38 @@ from .storage_backend import read_file, write_file, remove_file
 # Cache directory, default ~/.cache/bincache
 DEFAULT_CACHE_DIR = os.path.join(os.path.expanduser("~"), '.cache', 'bincache')
 DEFAULT_MAX_SIZE = 5 * 1024 * 1024 * 1024  # 5G
+DEFAULT_LOG_FILE = ""
+DEFAULT_STATS = False
 
 CACHE_DIR = os.getenv('BINCACHE_DIR', DEFAULT_CACHE_DIR)
 CONFIG_FILE = 'bincache.conf'
 
-# 读取配置
-def read_config(cache_dir):
-    config = ConfigParser()
-    config_file = os.path.join(cache_dir, CONFIG_FILE)
-    config_params = {'max_size': DEFAULT_MAX_SIZE}
-    
-    if os.path.exists(config_file):
-        config.read(config_file)
-        if config.has_option('cache', 'max_size'):
-            config_params['max_size'] = parse_size(config.get('cache', 'max_size'))
-    return config_params
-
-# 解析大小配置
 def parse_size(size_str):
-    size_str = size_str.lower()
-    units = {"b": 1, "k": 1024, "m": 1024**2, "g": 1024**3}
+    size_str = size_str.upper()
+    units = {"B": 1, "K": 1024, "M": 1024**2, "G": 1024**3}
     for unit in units:
         if size_str.endswith(unit):
             return int(size_str[:-1]) * units[unit]
     return int(size_str)
+
+def read_config(config_file):
+
+    config_params = {
+        'max_size': DEFAULT_MAX_SIZE,
+        'log_file': DEFAULT_LOG_FILE,
+        'stats': DEFAULT_STATS
+    }
+    if os.path.exists(config_file):
+        config = ConfigParser(allow_no_value=True)
+        config.read(config_file)
+        if config.has_option('DEFAULT', 'max_size'):
+            config_params['max_size'] = parse_size(config.get('DEFAULT', 'max_size'))
+            config_params['log_file'] = config.get('DEFAULT', 'log_file')
+            config_params['stats'] = config.getboolean('DEFAULT', 'stats')
+    return config_params
+
+config = read_config(os.path.join(CACHE_DIR, CONFIG_FILE))
+
 # 根据文件路径和文件名生成摘要
 def generate_initial_hash(path):
     hasher = hashlib.sha256()
@@ -119,7 +127,6 @@ def get_cached_output(binary, args):
 # 强制缓存大小
 def enforce_cache_size():
     cache_dir = CACHE_DIR
-    config = read_config(cache_dir)
     max_size = config['max_size']
     total_size = 0
     folders_with_files = []
