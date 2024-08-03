@@ -31,7 +31,7 @@ def read_config(config_file):
         'max_size': DEFAULT_MAX_SIZE,
         'log_file': DEFAULT_LOG_FILE,
         'stats': DEFAULT_STATS,
-        'temporary_dir': DEFAULT_TMP
+        'temporary_dir': DEFAULT_TEMPORARY_DIR
     }
     if os.path.exists(config_file):
         config = ConfigParser(allow_no_value=True)
@@ -110,15 +110,14 @@ def generate_cache_key(binary, args):
 def get_cache_file_path(binary, args):
     cache_key = generate_cache_key(binary, args)
     prefix = cache_key[:2]
-    suffix = cache_key[2:4]
-    filename = cache_key[4:]
-    cache_object_folder = os.path.join(CACHE_DIR, prefix, suffix)
-    return os.path.join(cache_object_folder, filename)
+    filename = cache_key[2:]
+    cache_file_folder = os.path.join(CACHE_DIR, prefix)
+    return os.path.join(cache_file_folder, filename)
 
 def cache_output(binary, args, output):
-    cache_file = get_cache_file_path(binary, args)
-    cache_object_folder = os.path.dirname(cache_file)
-    os.makedirs(cache_object_folder, exist_ok=True)
+    cache_file_path = get_cache_file_path(binary, args)
+    cache_file_folder = os.path.dirname(cache_file_path)
+    os.makedirs(cache_file_folder, exist_ok=True)
     try:
         with tempfile.NamedTemporaryFile(delete=False, dir=config['temporary_dir']) as temp_file:
             temp_path = temp_file.name
