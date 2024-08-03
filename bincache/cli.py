@@ -6,8 +6,9 @@ import tempfile
 import pickle
 import shutil
 
-from .config import get_config
-from .log import get_logger
+from config import get_config
+from log import get_logger
+from cache import get, put
 
 config = get_config()
 logger = get_logger()
@@ -62,44 +63,6 @@ def generate_cache_key(binary, args):
     hash_data = str(binary_info) + str(libs_info) + " ".join(args)
     return hashlib.md5(hash_data.encode('utf-8')).hexdigest()
 
-def get_cache_file_path(cache_key):
-    prefix = cache_key[:2]
-    filename = cache_key[2:]
-    cache_file_folder = os.path.join(CACHE_DIR, prefix)
-    return os.path.join(cache_file_folder, filename)
-
-def cache_put(cache_key, output):
-    cache_file_path = get_cache_file_path(cache_key)
-    if cache_file_path is None:
-        return
-    cache_file_folder = os.path.dirname(cache_file_path)
-    os.makedirs(cache_file_folder, exist_ok=True)
-    if config['temporary_dir']:
-        os.makedirs(config['temporary_dir'], exist_ok=True)
-        with tempfile.NamedTemporaryFile(delete=False, dir=config['temporary_dir']) as temp_file:
-            temp_path = temp_file.name
-            pickle.dump(output, temp_file)
-        try:
-            os.rename(temp_path, cache_file_path)
-        finally:
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
-    else:
-        pickle.dump(output, cache_file_path)
-
-def cache_get(cache_key):
-    if not cache_key:
-        return None
-    cache_file_path = get_cache_file_path(cache_key)
-    if not cache_file_path:
-        return None
-    try:
-        with open(cache_file_path, 'rb') as f:
-            data = f.read()
-            return pickle.loads(data)
-    except FileNotFoundError:
-        return None
-
 def find_binary(command):
     binary_path = shutil.which(command)
     if binary_path is None:
@@ -114,7 +77,7 @@ if __name__ == "__main__":
     binary = find_binary(sys.argv[1])
     args = sys.argv[2:]
     cache_key = generate_cache_key(binary, args)
-    cached_output = cache_get(cache_key)
+    cached_output = get(cache_key)
     if cached_output is not None:
         sys.stdout.write(cached_output)
     else:
@@ -124,7 +87,7 @@ if __name__ == "__main__":
         stderr = stderr.decode('utf-8')
         if result.returncode == 0 and not stderr:
             try:
-                cache_put(cache_key, stdout)
+                put(cache_key, stdout)
             except Exception as e:
                 pass
         sys.stdout.write(stdout)
