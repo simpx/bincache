@@ -13,11 +13,6 @@ from unittest.mock import patch, mock_open, MagicMock
 from bincache import cli
 
 @pytest.fixture
-def mock_file_info():
-    with patch('bincache.cli.get_file_info') as mock:
-        yield mock
-
-@pytest.fixture
 def mock_dynamic_libs():
     with patch('bincache.cli.get_dynamic_libs') as mock:
         yield mock
@@ -32,7 +27,7 @@ def mock_getmtime():
     with patch('os.path.getmtime') as mock:
         yield mock
 
-def test_generate_hash(mock_file_info, mock_dynamic_libs, mock_getmtime):
+def test_generate_hash(mock_dynamic_libs, mock_getmtime):
     binary = "/path/to/binary"
     args = ["arg1", "arg2"]
     mock_file_info.return_value = ('dummy_md5',)
@@ -61,7 +56,7 @@ def test_md5():
     expected_md5 = hashlib.md5(b"binary content").hexdigest()
     
     with patch("bincache.cli.io.open", mock_open(read_data=b"binary content"), create=True) as mock_file:
-        result = cli.md5(file_path)
+        result = cli.hash_file_md5(file_path)
         assert result == expected_md5
 
 @pytest.fixture

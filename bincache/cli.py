@@ -25,7 +25,6 @@ def parse_size(size_str):
     return int(size_str)
 
 def read_config(config_file):
-
     config_params = {
         'max_size': DEFAULT_MAX_SIZE,
         'log_file': DEFAULT_LOG_FILE,
@@ -57,13 +56,12 @@ def get_cache_file_path(binary, args):
     cache_key = generate_hash(binary, args)
     return os.path.join(cache_object_folder, cache_key)
 
-# MD5摘要
-def md5(file_path):
-    hash_md5 = hashlib.md5()
-    with io.open(file_path, 'rb') as f:
-        for chunk in iter(lambda: f.read(4096), b""):
-            hash_md5.update(chunk)
-    return hash_md5.hexdigest()
+def hash_file_md5(file_path):
+    md5 = hashlib.md5()
+    with open(file_path, 'rb') as f:
+        while chunk := f.read(8192):
+            md5.update(chunk)
+    return md5.hexdigest()
 
 # 动态库信息
 def get_dynamic_libs(binary):
@@ -89,13 +87,9 @@ def get_dynamic_libs(binary):
 
     return libs
 
-# 文件信息
-def get_file_info(file_path):
-    return (md5(file_path), )
-
 # 生成hash
 def generate_hash(binary, args):
-    binary_info = get_file_info(binary)
+    binary_info = hash_file_md5(binary)
     libs = get_dynamic_libs(binary)
     libs_info = [(lib, os.path.getmtime(lib)) for lib in libs]
     hash_data = str(binary_info) + str(libs_info) + " ".join(args)
