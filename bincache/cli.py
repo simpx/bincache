@@ -142,15 +142,16 @@ def enforce_cache_size():
             remove_file(file_path)
             total_size -= file_size
 def find_binary(command):
+    #TODO alias
     binary_path = shutil.which(command)
     if binary_path is None:
-        print(f"Command {command} not found")
+        print(f"Binary or Command {command} not found")
         sys.exit(1)
     return binary_path
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: bincache.py <binary> <arguments>")
+        print("Usage: bincache <binary_or_command> <arguments>")
         sys.exit(1)
     
     command = sys.argv[1]
