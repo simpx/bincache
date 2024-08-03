@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 import hashlib
@@ -10,6 +11,7 @@ from configparser import ConfigParser
 DEFAULT_CACHE_DIR = os.path.join(os.path.expanduser("~"), '.cache', 'bincache')
 DEFAULT_MAX_SIZE = 5 * 1024 * 1024 * 1024  # 5G
 DEFAULT_LOG_FILE = ""
+DEFAULT_LOG_LEVEL = "INFO"
 DEFAULT_STATS = False
 CACHE_DIR = os.getenv('BINCACHE_DIR', DEFAULT_CACHE_DIR)
 DEFAULT_TEMPORARY_DIR = os.path.join(CACHE_DIR, 'tmp')
@@ -27,6 +29,7 @@ def read_config(config_file):
     config_params = {
         'max_size': DEFAULT_MAX_SIZE,
         'log_file': DEFAULT_LOG_FILE,
+        'log_level': DEFAULT_LOG_LEVEL,
         'stats': DEFAULT_STATS,
         'temporary_dir': DEFAULT_TEMPORARY_DIR
     }
@@ -38,7 +41,12 @@ def read_config(config_file):
         if config.has_option('DEFAULT', 'max_size'):
             config_params['max_size'] = parse_size(config.get('DEFAULT', 'max_size'))
         if config.has_option('DEFAULT', 'log_file'):
-            config_params['log_file'] = config.get('DEFAULT', 'log_file')
+            log_file = config.get('DEFAULT', 'log_file')
+            if not os.path.isabs(log_file) and not log_file.startswith('.' + os.sep):
+                log_file = os.path.join(CACHE_DIR, log_file)
+            config_params['log_file'] = log_file
+        if config.has_option('DEFAULT', 'log_level'):
+            config_params['log_level'] = config.get('DEFAULT', 'log_level').upper()
         if config.has_option('DEFAULT', 'stats'):
             config_params['stats'] = config.getboolean('DEFAULT', 'stats')
         if config.has_option('DEFAULT', 'temporary_dir'):
@@ -46,6 +54,14 @@ def read_config(config_file):
     return config_params
 
 config = read_config(os.path.join(CACHE_DIR, CONFIG_FILE))
+logger = logging.getLogger('bincache')
+log_level = getattr(logging, config['log_level'], logging.INFO)
+logger.setLevel(log_level)
+if config['log_file']:
+    log_handler = logging.FileHandler(config['log_file'])
+    log_formatter = logging.Formatter('%(asctime)s - PID: %(process)d - PWD: %(pathname)s - %(message)s')
+    log_handler.setFormatter(log_formatter)
+    logger.addHandler(log_handler)
 
 ##################
 # File Operation #
