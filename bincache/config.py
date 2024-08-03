@@ -6,8 +6,6 @@ DEFAULT_MAX_SIZE = 5 * 1024 * 1024 * 1024  # 5G
 DEFAULT_LOG_FILE = ""
 DEFAULT_LOG_LEVEL = "INFO"
 DEFAULT_STATS = False
-CACHE_DIR = os.getenv('BINCACHE_DIR', DEFAULT_CACHE_DIR)
-DEFAULT_TEMPORARY_DIR = os.path.join(CACHE_DIR, 'tmp')
 CONFIG_FILE = 'bincache.conf'
 
 _config = None
@@ -23,13 +21,14 @@ def parse_size(size_str):
 def get_config():
     global _config
     if not _config:
-        config_file = os.path.join(CACHE_DIR, CONFIG_FILE)
+        cache_dir = os.getenv('BINCACHE_DIR', DEFAULT_CACHE_DIR)
+        config_file = os.path.join(cache_dir, CONFIG_FILE)
         config_params = {
             'max_size': DEFAULT_MAX_SIZE,
             'log_file': DEFAULT_LOG_FILE,
             'log_level': DEFAULT_LOG_LEVEL,
             'stats': DEFAULT_STATS,
-            'temporary_dir': DEFAULT_TEMPORARY_DIR
+            'temporary_dir': os.path.join(cache_dir, 'tmp')
         }
         if os.path.exists(config_file):
             with open(config_file, 'r') as f:
@@ -41,7 +40,7 @@ def get_config():
             if config.has_option('DEFAULT', 'log_file'):
                 log_file = config.get('DEFAULT', 'log_file')
                 if not os.path.isabs(log_file) and not log_file.startswith('.' + os.sep):
-                    log_file = os.path.join(CACHE_DIR, log_file)
+                    log_file = os.path.join(cache_dir, log_file)
                 config_params['log_file'] = log_file
             if config.has_option('DEFAULT', 'log_level'):
                 config_params['log_level'] = config.get('DEFAULT', 'log_level').upper()
