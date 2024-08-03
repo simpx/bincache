@@ -141,31 +141,6 @@ def enforce_cache_size():
             _, file_size, file_path = folder_files[0]
             remove_file(file_path)
             total_size -= file_size
-
-def garbage_collection():
-    cache_dir = CACHE_DIR
-    try:
-        for prefix in os.listdir(cache_dir):
-            prefix_path = os.path.join(cache_dir, prefix)
-            if os.path.isdir(prefix_path):
-                for suffix in os.listdir(prefix_path):
-                    cache_object_folder = os.path.join(prefix_path, suffix)
-                    if os.path.isdir(cache_object_folder):
-                        cache_files = [f for f in os.listdir(cache_object_folder) if os.path.isfile(os.path.join(cache_object_folder, f))]
-                        # 删除空的缓存目录
-                        if not cache_files:
-                            os.rmdir(cache_object_folder)
-                        # 保留最新的一个缓存文件
-                        elif len(cache_files) > 1:
-                            cache_files_paths = [os.path.join(cache_object_folder, f) for f in cache_files]
-                            cache_files_paths.sort(key=lambda p: os.path.getmtime(p), reverse=True)
-                            for file_path in cache_files_paths[1:]:
-                                remove_file(file_path)
-                        if not os.listdir(cache_object_folder):
-                            os.rmdir(cache_object_folder)
-    except Exception as e:
-        print(f"Garbage collection failed: {e}")
-
 def find_binary(command):
     binary_path = shutil.which(command)
     if binary_path is None:
@@ -175,14 +150,10 @@ def find_binary(command):
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: bincache.py <binary> <arguments> or bincache.py --gc")
+        print("Usage: bincache.py <binary> <arguments>")
         sys.exit(1)
     
     command = sys.argv[1]
-    
-    if command == "--gc":
-        garbage_collection()
-        return
     
     binary = find_binary(command)
     args = sys.argv[2:]
