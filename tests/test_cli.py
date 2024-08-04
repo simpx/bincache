@@ -30,7 +30,8 @@ def mock_binary(monkeypatch):
         'dummy_command_cache': '/bin/dummy_command',
         'echo': '/bin/echo',
         './error': './error',
-        './error_cache': './error_cache',
+        './error_but_cache': './error_but_cache',
+        './command_with_stderr': './command_with_stderr',
         './not_found': None
     }
     binary_map = {
@@ -54,13 +55,19 @@ def mock_binary(monkeypatch):
             'stderr': 'error_stderr',
             'returncode': 1
         },
-        ('./error_cache',): {
-            'signature': 'error_cache_signature',
-            'cached_output': 'error_cached_output',
+        ('./error_but_cache',): {
+            'signature': 'error_but_cache_signature',
+            'cached_output': 'error_but_cached_output',
             'stdout': 'error_stdout',
             'stderr': 'error_stderr',
             'returncode': 1
         },
+        ('./command_with_stderr',): {
+            'signature': 'command_with_stderr_signature',
+            'stdout': 'error_stdout',
+            'stderr': 'error_stderr',
+            'returncode': 0
+        }
     }
 
     def which(cmd):
@@ -93,6 +100,7 @@ def mock_binary(monkeypatch):
     monkeypatch.setattr('bincache.cli.get', cache_get)
     monkeypatch.setattr(subprocess, 'Popen', popen_mock)
 
+# case: 没有提供命令行参数
 def test_no_arguments(monkeypatch, capsys):
     monkeypatch.setattr(sys, 'argv', ['bincache'])
     with pytest.raises(SystemExit) as pytest_wrapped_e:
@@ -103,6 +111,7 @@ def test_no_arguments(monkeypatch, capsys):
     captured = capsys.readouterr()
     assert "Usage: bincache <binary_or_command> <arg1> [arg2 ... argN]" in captured.out
 
+# case: 命中缓存
 def test_cached_output(monkeypatch, mock_binary, mock_logger, capsys):
     monkeypatch.setattr(sys, 'argv', ['bincache', 'dummy_command_cache'])
     with pytest.raises(SystemExit) as pytest_wrapped_e:
@@ -112,14 +121,12 @@ def test_cached_output(monkeypatch, mock_binary, mock_logger, capsys):
     captured = capsys.readouterr()
     assert captured.out == "dummy_command_cached_output"
 
-def test_exec_command_and_cache(monkeypatch, mock_config, mock_logger, tmpdir, capsys, mock_binary):
+# case: 未命中缓存但执行成功，并验证结果被缓存
+def test_exec_command_and_cache(monkeypatch, mock_config, mock_logger, capsys, mock_binary):
     monkeypatch.setattr(sys, 'argv', ['bincache', 'echo', 'Hello'])
-    tempdir = tmpdir.mkdir('cache')
-    config = get_config()
-    config['cache_dir'] = str(tempdir)
 
     put_mock = mock.Mock()
-    monkeypatch.setattr('bincache.cache.put', put_mock)
+    monkeypatch.setattr('bincache.cli.put', put_mock)
     
     with pytest.raises(SystemExit) as pytest_wrapped_e:
         main()
@@ -132,8 +139,13 @@ def test_exec_command_and_cache(monkeypatch, mock_config, mock_logger, tmpdir, c
     # Verify that the command output was cached
     put_mock.assert_called_once_with('echo_signature', 'Hello')
 
+# case: 未命中缓存且执行失败，并验证结果不会被缓存
 def test_exec_command_with_error(monkeypatch, mock_config, mock_logger, capsys, mock_binary):
     monkeypatch.setattr(sys, 'argv', ['bincache', './error'])
+
+    put_mock = mock.Mock()
+    monkeypatch.setattr('bincache.cli.put', put_mock)
+
     with pytest.raises(SystemExit) as pytest_wrapped_e:
         main()
     assert pytest_wrapped_e.type == SystemExit
@@ -143,11 +155,36 @@ def test_exec_command_with_error(monkeypatch, mock_config, mock_logger, capsys, 
     assert captured.out.strip() == 'error_stdout'
     assert captured.err.strip() == 'error_stderr'
 
+    # Verify that the command output was not cached
+    put_mock.assert_not_called()
+
+# case: 命中缓存，哪怕实际结果可能会失败，也会返回缓存
 def test_cached_output_with_error(monkeypatch, mock_binary, mock_logger, capsys):
-    monkeypatch.setattr(sys, 'argv', ['bincache', './error_cache'])
+    monkeypatch.setattr(sys, 'argv', ['bincache', './error_but_cache'])
     with pytest.raises(SystemExit) as pytest_wrapped_e:
         main()
     assert pytest_wrapped_e.type == SystemExit
     assert pytest_wrapped_e.value.code == 0  # Assuming we read from cache and do not execute
     captured = capsys.readouterr()
-    assert captured.out == "error_cached_output"
+    assert captured.out == "error_but_cached_output"
+
+# case: 未命中缓存且执行成功，但由于有stderr，所以不会被缓存
+def test_exec_command_with_error(monkeypatch, mock_config, mock_logger, capsys, mock_binary):
+    monkeypatch.setattr(sys, 'argv', ['bincache', './command_with_stderr'])
+
+    put_mock = mock.Mock()
+    monkeypatch.setattr('bincache.cli.put', put_mock)
+
+    with pytest.raises(SystemExit) as pytest_wrapped_e:
+        main()
+    assert pytest_wrapped_e.type == SystemExit
+    assert pytest_wrapped_e.value.code == 0
+
+    captured = capsys.readouterr()
+    assert captured.out.strip() == 'error_stdout'
+    assert captured.err.strip() == 'error_stderr'
+
+    # Verify that the command output was not cached
+    put_mock.assert_not_called()
+
+# case: 
