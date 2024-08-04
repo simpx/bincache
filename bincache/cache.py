@@ -2,6 +2,7 @@ import os
 import pickle
 import tempfile
 from bincache.config import get_config
+from bincache.log import get_logger
 
 def get_cache_file_path(key):
     config = get_config()
@@ -13,6 +14,7 @@ def get_cache_file_path(key):
 # TODO Add file locking or other mechanism to handle multi-process access
 def trim_cache_dir_to_limit(cache_dir, limit_size_in_bytes):
     """removing old files if the total size exceeds the limit."""
+    log = get_logger()
     total_size = 0
     file_paths = []
     for root, dirs, files in os.walk(cache_dir):
@@ -24,12 +26,14 @@ def trim_cache_dir_to_limit(cache_dir, limit_size_in_bytes):
             file_size = os.path.getsize(file_path)
             total_size += file_size
             file_paths.append((file_path, os.path.getmtime(file_path), file_size))
+    log.info(f"totle_size: {total_size}, limit_size_in_bytes: {limit_size_in_bytes}")
     if total_size <= limit_size_in_bytes:
         return
     # Sort files by modification time (oldest first)
     file_paths.sort(key=lambda x: x[1])
     for file_path, _, file_size in file_paths:
         os.remove(file_path)
+        log.info(f"{file_path} removed, totle_size: {total_size}, limit_size_in_bytes: {limit_size_in_bytes}")
         total_size -= file_size
         if total_size <= limit_size_in_bytes:
             break
