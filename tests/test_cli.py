@@ -9,7 +9,6 @@ from io import StringIO
 from bincache.cli import main
 from bincache.cache import get, put
 from bincache.config import get_config
-from bincache.log import get_logger
 
 @pytest.fixture
 def mock_config(monkeypatch, tmpdir):
@@ -18,11 +17,6 @@ def mock_config(monkeypatch, tmpdir):
     mock_config = {'cache_dir': temp_cache_dir, 'temporary_dir': temp_tempdir}
     monkeypatch.setattr('bincache.config.get_config', lambda: mock_config)
     return mock_config
-
-@pytest.fixture
-def mock_logger(monkeypatch):
-    logger = mock.Mock()
-    monkeypatch.setattr('bincache.log.get_logger', lambda: logger)
 
 @pytest.fixture
 def mock_binary(monkeypatch):
@@ -135,7 +129,7 @@ def test_no_arguments(monkeypatch, capsys):
     assert "Usage: bincache <binary_or_command> <arg1> [arg2 ... argN]" in captured.out
 
 # case: 命中缓存
-def test_cached_output(monkeypatch, mock_binary, mock_logger, capsys):
+def test_cached_output(monkeypatch, mock_binary, capsys):
     monkeypatch.setattr(sys, 'argv', ['bincache', 'dummy_command_cache'])
     with pytest.raises(SystemExit) as pytest_wrapped_e:
         main()
@@ -145,7 +139,7 @@ def test_cached_output(monkeypatch, mock_binary, mock_logger, capsys):
     assert captured.out == "dummy_command_cached_output"
 
 # case: 未命中缓存但执行成功，并验证结果被缓存
-def test_exec_command_and_cache(monkeypatch, mock_config, mock_logger, capsys, mock_binary):
+def test_exec_command_and_cache(monkeypatch, mock_config, capsys, mock_binary):
     monkeypatch.setattr(sys, 'argv', ['bincache', 'echo', 'Hello'])
 
     put_mock = mock.Mock()
@@ -163,7 +157,7 @@ def test_exec_command_and_cache(monkeypatch, mock_config, mock_logger, capsys, m
     put_mock.assert_called_once_with('echo_signature', 'Hello')
 
 # case: 未命中缓存且执行失败，并验证结果不会被缓存
-def test_exec_command_with_error(monkeypatch, mock_config, mock_logger, capsys, mock_binary):
+def test_exec_command_with_error(monkeypatch, mock_config, capsys, mock_binary):
     monkeypatch.setattr(sys, 'argv', ['bincache', './error'])
 
     put_mock = mock.Mock()
@@ -182,7 +176,7 @@ def test_exec_command_with_error(monkeypatch, mock_config, mock_logger, capsys, 
     put_mock.assert_not_called()
 
 # case: 命中缓存，哪怕实际结果可能会失败，也会返回缓存
-def test_cached_output_with_error(monkeypatch, mock_binary, mock_logger, capsys):
+def test_cached_output_with_error(monkeypatch, mock_binary, capsys):
     monkeypatch.setattr(sys, 'argv', ['bincache', './error_but_cache'])
     with pytest.raises(SystemExit) as pytest_wrapped_e:
         main()
@@ -192,7 +186,7 @@ def test_cached_output_with_error(monkeypatch, mock_binary, mock_logger, capsys)
     assert captured.out == "error_but_cached_output"
 
 # case: 未命中缓存且执行成功，但由于有stderr，所以不会被缓存
-def test_exec_command_with_error(monkeypatch, mock_config, mock_logger, capsys, mock_binary):
+def test_exec_command_with_error(monkeypatch, mock_config, capsys, mock_binary):
     monkeypatch.setattr(sys, 'argv', ['bincache', './command_with_stderr'])
 
     put_mock = mock.Mock()
@@ -211,7 +205,7 @@ def test_exec_command_with_error(monkeypatch, mock_config, mock_logger, capsys, 
     put_mock.assert_not_called()
 
 # case: 命令不存在
-def test_exec_not_found(monkeypatch, mock_binary, mock_config, mock_logger, capsys):
+def test_exec_not_found(monkeypatch, mock_binary, mock_config, capsys):
     monkeypatch.setattr(sys, 'argv', ['bincache', './not_found'])
 
     with pytest.raises(SystemExit) as pytest_wrapped_e:
@@ -224,7 +218,7 @@ def test_exec_not_found(monkeypatch, mock_binary, mock_config, mock_logger, caps
     assert captured.err.strip() == 'bincache: command not found: ./not_found'
 
 # case: 命令无权执行
-def test_exec_no_permission(monkeypatch, mock_binary, mock_config, mock_logger, capsys):
+def test_exec_no_permission(monkeypatch, mock_binary, mock_config, capsys):
     monkeypatch.setattr(sys, 'argv', ['bincache', './no_permission'])
 
     with pytest.raises(SystemExit) as pytest_wrapped_e:
@@ -237,7 +231,7 @@ def test_exec_no_permission(monkeypatch, mock_binary, mock_config, mock_logger, 
     assert captured.err.strip() == 'bincache: permission denied: ./no_permission'
 
 # case: os错误
-def test_exec_os_error(monkeypatch, mock_binary, mock_config, mock_logger, capsys):
+def test_exec_os_error(monkeypatch, mock_binary, mock_config, capsys):
     monkeypatch.setattr(sys, 'argv', ['bincache', './os_error'])
 
     with pytest.raises(SystemExit) as pytest_wrapped_e:
@@ -250,7 +244,7 @@ def test_exec_os_error(monkeypatch, mock_binary, mock_config, mock_logger, capsy
     assert 'bincache: OS error: ./os_error:' in captured.err.strip()
 
 # case: 其他错误 
-def test_exec_other_error(monkeypatch, mock_binary, mock_config, mock_logger, capsys):
+def test_exec_other_error(monkeypatch, mock_binary, mock_config, capsys):
     monkeypatch.setattr(sys, 'argv', ['bincache', './other_error'])
 
     with pytest.raises(SystemExit) as pytest_wrapped_e:
@@ -263,7 +257,7 @@ def test_exec_other_error(monkeypatch, mock_binary, mock_config, mock_logger, ca
     assert 'bincache: error executing: ./other_error:' in captured.err.strip()
 
 # case: 即使bincache内部异常，也会正常执行命令
-def test_exec_command_with_bincache_error(monkeypatch, mock_config, mock_logger, capsys, mock_binary):
+def test_exec_command_with_bincache_error(monkeypatch, mock_config, capsys, mock_binary):
     monkeypatch.setattr(sys, 'argv', ['bincache', 'echo', 'Hello'])
 
     def raise_error(*args, **kwargs):
@@ -283,7 +277,7 @@ def test_exec_command_with_bincache_error(monkeypatch, mock_config, mock_logger,
     assert captured.out.strip() == "Hello"
 
 # case: 即使bincache内部全部返回None，也会正常执行命令
-def test_exec_command_with_bincache_error(monkeypatch, mock_config, mock_logger, capsys, mock_binary):
+def test_exec_command_with_bincache_error(monkeypatch, mock_config, capsys, mock_binary):
     monkeypatch.setattr(sys, 'argv', ['bincache', 'echo', 'Hello'])
 
     def return_None(*args, **kwargs):
