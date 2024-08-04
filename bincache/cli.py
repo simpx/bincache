@@ -12,12 +12,6 @@ config = get_config()
 logger = get_logger()
 
 def execute_command(command, args):
-    result = subprocess.Popen([command] + args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout, stderr = result.communicate()
-    stdout = stdout.decode('utf-8')
-    stderr = stderr.decode('utf-8')
-    return result.returncode, stdout, stderr
-
     try:
         result = subprocess.Popen([command] + args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = result.communicate()

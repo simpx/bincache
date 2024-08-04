@@ -32,7 +32,6 @@ def mock_binary(monkeypatch):
         './error': './error',
         './error_but_cache': './error_but_cache',
         './command_with_stderr': './command_with_stderr',
-        './not_found': None
     }
     cache_map = {
         ('/bin/dummy_command',): {
@@ -202,4 +201,21 @@ def test_exec_command_with_error(monkeypatch, mock_config, mock_logger, capsys, 
     # Verify that the command output was not cached
     put_mock.assert_not_called()
 
-# case: 
+# case: 命令不存在
+def test_exec_not_found(monkeypatch, mock_binary, mock_config, mock_logger, capsys):
+    monkeypatch.setattr(sys, 'argv', ['bincache', './not_found'])
+
+    put_mock = mock.Mock()
+    monkeypatch.setattr('bincache.cli.put', put_mock)
+
+    with pytest.raises(SystemExit) as pytest_wrapped_e:
+        main()
+    assert pytest_wrapped_e.type == SystemExit
+    assert pytest_wrapped_e.value.code == 127
+
+    captured = capsys.readouterr()
+    assert captured.out.strip() == ''
+    assert captured.err.strip() == 'bincache: command not found: ./not_found'
+
+    # Verify that the command output was not cached
+    put_mock.assert_not_called()
