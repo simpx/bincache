@@ -3,13 +3,8 @@ import sys
 import subprocess
 import shutil
 
-from bincache.config import get_config
-from bincache.log import get_logger
 from bincache.cache import get, put
 from bincache.signature import generate_signature
-
-config = get_config()
-logger = get_logger()
 
 def execute_command(argv):
     try:
