@@ -36,18 +36,18 @@ def get_config():
                 config_string = f"[DEFAULT]\n" + f.read()
             config = ConfigParser(allow_no_value=True)
             config.read_string(config_string)
-            if config.has_option('DEFAULT', 'max_size'):
+            if config.has_option('DEFAULT', 'max_size') and config.get('DEFAULT', 'max_size') is not None:
                 config_params['max_size'] = parse_size(config.get('DEFAULT', 'max_size'))
-            if config.has_option('DEFAULT', 'log_file'):
+            if config.has_option('DEFAULT', 'log_file') and config.get('DEFAULT', 'log_file') is not None:
                 log_file = config.get('DEFAULT', 'log_file')
                 if not os.path.isabs(log_file) and not log_file.startswith('.' + os.sep):
                     log_file = os.path.join(cache_dir, log_file)
                 config_params['log_file'] = log_file
-            if config.has_option('DEFAULT', 'log_level'):
+            if config.has_option('DEFAULT', 'log_level') and config.get('DEFAULT', 'log_level') is not None:
                 config_params['log_level'] = config.get('DEFAULT', 'log_level').upper()
-            if config.has_option('DEFAULT', 'stats'):
+            if config.has_option('DEFAULT', 'stats') and config.get('DEFAULT', 'stats') is not None:
                 config_params['stats'] = config.getboolean('DEFAULT', 'stats')
-            if config.has_option('DEFAULT', 'temporary_dir'):
+            if config.has_option('DEFAULT', 'temporary_dir') and config.get('DEFAULT', 'temporary_dir') is not None:
                 config_params['temporary_dir'] = config.get('DEFAULT', 'temporary_dir')
         _config = config_params
     return _config

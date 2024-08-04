@@ -55,7 +55,32 @@ def test_get_config_with_file():
         assert config['log_level'] == "DEBUG"
         assert config['stats'] == True
         assert config['temporary_dir'] == "/tmp/test_tmp"
-    
+
+def test_get_config_with_invalid_data():
+    """测试 get_config 函数，确保会忽略配置文件中的错误配置"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        cache_dir = os.path.join(tmpdir, 'cache')
+        os.makedirs(cache_dir)
+        config_file = os.path.join(cache_dir, CONFIG_FILE)
+        
+        with open(config_file, 'w') as f:
+            f.write("""
+            max_size
+            log_file=test.log
+            log_level
+            stats=True
+            temporary_dir=/tmp/test_tmp
+            """)
+        
+        os.environ['BINCACHE_DIR'] = cache_dir
+        
+        config = get_config()
+        
+        assert config['max_size'] == 5 * 1024 * 1024 * 1024 # default
+        assert config['log_file'] == os.path.join(cache_dir, 'test.log')
+        assert config['log_level'] == "INFO" # default
+        assert config['stats'] == True
+        assert config['temporary_dir'] == "/tmp/test_tmp"
 
 def test_get_config_with_relative_log_file():
     """测试 get_config 函数，确保在 log_file 配置为相对路径时能正确解析为绝对路径"""
