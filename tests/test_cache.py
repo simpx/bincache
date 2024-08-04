@@ -3,7 +3,7 @@ import pickle
 import pytest
 import tempfile
 from unittest import mock
-from bincache.cache import get_cache_file_path, put, get
+from bincache.cache import get_cache_file_path, put, get, trim_cache_dir_to_limit
 
 @pytest.fixture
 def setup_cache_config(monkeypatch, tmpdir):
@@ -70,3 +70,52 @@ def test_put_get_very_large_content(setup_cache_config):
     put(key, value)
     retrieved_value = get(key)
     assert value == retrieved_value
+
+def test_trim_cache_dir_to_limit_no_trim(setup_cache_config):
+    key1 = 'key1'
+    value1 = 'a' * 100
+    key2 = 'key2'
+    value2 = 'b' * 100
+  
+    put(key1, value1)
+    put(key2, value2)
+
+    trim_cache_dir_to_limit(setup_cache_config['cache_dir'], 300)
+
+    assert get(key1) == value1
+    assert get(key2) == value2
+
+def test_trim_cache_dir_to_limit_with_trim(setup_cache_config):
+    key1 = 'key1'
+    value1 = 'a' * 100
+    key2 = 'key2'
+    value2 = 'b' * 100
+    key3 = 'key3'
+    value3 = 'c' * 100
+
+    put(key1, value1)
+    put(key2, value2)
+    put(key3, value3)
+
+    trim_cache_dir_to_limit(setup_cache_config['cache_dir'], 200)
+
+    assert get(key1) == None
+    assert get(key2) == None
+    assert get(key3) == value3
+
+def test_trim_cache_dir_to_limit_with_exact_limit(setup_cache_config):
+    key1 = 'key1'
+    value1 = 'a' * 100
+    size1 = len(pickle.dumps(value1))
+    key2 = 'key2'
+    value2 = 'b' * 100
+    size2 = len(pickle.dumps(value2))
+    total_size = size1 + size2
+
+    put(key1, value1)
+    put(key2, value2)
+
+    trim_cache_dir_to_limit(setup_cache_config['cache_dir'], total_size)
+
+    assert get(key1) == value1
+    assert get(key2) == value2
