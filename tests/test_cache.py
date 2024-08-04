@@ -1,4 +1,5 @@
 import os
+import time
 import pickle
 import pytest
 import tempfile
@@ -96,6 +97,10 @@ def test_trim_cache_dir_to_limit_with_trim(setup_cache_config):
     put(key1, value1)
     put(key2, value2)
     put(key3, value3)
+
+    os.utime(get_cache_file_path(key1), (time.time() - 3, time.time() - 3))
+    os.utime(get_cache_file_path(key2), (time.time() - 2, time.time() - 2))
+    os.utime(get_cache_file_path(key3), (time.time() - 1, time.time() - 1))
 
     trim_cache_dir_to_limit(setup_cache_config['cache_dir'], 200)
 
