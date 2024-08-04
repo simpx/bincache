@@ -34,39 +34,53 @@ def mock_binary(monkeypatch):
         './command_with_stderr': './command_with_stderr',
         './not_found': None
     }
-    binary_map = {
+    cache_map = {
         ('/bin/dummy_command',): {
             'signature': 'dummy_command_signature',
             'cached_output': 'dummy_command_cached_output',
+        },
+        ('/bin/echo', 'Hello'): {
+            'signature': 'echo_signature',
+        },
+        ('./error',): {
+            'signature': 'error_signature',
+        },
+        ('./error_but_cache',): {
+            'signature': 'error_but_cache_signature',
+            'cached_output': 'error_but_cached_output',
+        },
+        ('./command_with_stderr',): {
+            'signature': 'command_with_stderr_signature',
+        },
+    }
+    command_map = {
+        ('dummy_command_cache',): {
             'stdout': 'dummy_command_stdout',
             'stderr': '',
             'returncode': 0
         },
-        ('/bin/echo', 'Hello'): {
-            'signature': 'echo_signature',
+        ('echo', 'Hello'): {
             'stdout': 'Hello',
             'stderr': '',
             'returncode': 0
         },
         ('./error',): {
-            'signature': 'error_signature',
-            'cached_output': None,
             'stdout': 'error_stdout',
             'stderr': 'error_stderr',
             'returncode': 1
         },
         ('./error_but_cache',): {
-            'signature': 'error_but_cache_signature',
-            'cached_output': 'error_but_cached_output',
             'stdout': 'error_stdout',
             'stderr': 'error_stderr',
             'returncode': 1
         },
         ('./command_with_stderr',): {
-            'signature': 'command_with_stderr_signature',
             'stdout': 'error_stdout',
             'stderr': 'error_stderr',
             'returncode': 0
+        },
+        ('./not_found',): {
+            'raise_error': FileNotFoundError
         }
     }
 
@@ -74,22 +88,23 @@ def mock_binary(monkeypatch):
         return alias_map.get(cmd)
 
     def generate_signature(binary, args):
-        details = binary_map.get((binary,) + tuple(args))
+        details = cache_map.get((binary,) + tuple(args))
         return details.get('signature') if details else None
 
     def cache_get(key):
         if key is None:
             return None
-        for binary, details in binary_map.items():
+        for binary, details in cache_map.items():
             if key == details.get('signature'):
                 return details.get('cached_output')
         return None
 
     def popen_mock(*popen_args, **kwargs):
         cmd = popen_args[0]
-        binary = which(cmd[0])
-        details = binary_map.get((binary,) + tuple(cmd[1:]))
+        details = command_map.get(tuple(cmd))
         if details:
+            if 'raise_error' in details:
+                raise details['raise_error']
             mock_proc = mock.Mock()
             mock_proc.communicate.return_value = (details['stdout'].encode('utf-8'), details['stderr'].encode('utf-8'))
             mock_proc.returncode = details.get('returncode')
