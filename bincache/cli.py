@@ -3,16 +3,22 @@ import sys
 import subprocess
 import shutil
 
-from config import get_config
-from log import get_logger
-from cache import get, put
+from bincache.config import get_config
+from bincache.log import get_logger
+from bincache.cache import get, put
 
 config = get_config()
 logger = get_logger()
 
-if __name__ == "__main__":
+def main():
     if len(sys.argv) < 2:
-        print("Usage: bincache <binary_or_command> <arguments>")
+        print("Usage: bincache <binary_or_command> <arg1> [arg2 ... argN]")
+        print("  <binary_or_command> can be a path to an executable binary or a shell command.")
+        print("  <arg1> ... <argN>   are the arguments to be passed to the binary or command.")
+        print()
+        print("Examples:")
+        print("  bincache date")
+        print("  bincache ./a.out -l -a")
         sys.exit(1)
     binary = shutil.which(sys.argv[1])
     args = sys.argv[2:]
@@ -34,3 +40,6 @@ if __name__ == "__main__":
     sys.stdout.write(stdout)
     sys.stderr.write(stderr)
     sys.exit(result.returncode)
+
+if __name__ == "__main__":
+    main()
