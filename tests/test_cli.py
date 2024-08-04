@@ -111,3 +111,43 @@ def test_cached_output(monkeypatch, mock_binary, mock_logger, capsys):
     assert pytest_wrapped_e.value.code == 0
     captured = capsys.readouterr()
     assert captured.out == "dummy_command_cached_output"
+
+def test_exec_command_and_cache(monkeypatch, mock_config, mock_logger, tmpdir, capsys, mock_binary):
+    monkeypatch.setattr(sys, 'argv', ['bincache', 'echo', 'Hello'])
+    tempdir = tmpdir.mkdir('cache')
+    config = get_config()
+    config['cache_dir'] = str(tempdir)
+
+    put_mock = mock.Mock()
+    monkeypatch.setattr('bincache.cache.put', put_mock)
+    
+    with pytest.raises(SystemExit) as pytest_wrapped_e:
+        main()
+    assert pytest_wrapped_e.type == SystemExit
+    assert pytest_wrapped_e.value.code == 0
+
+    captured = capsys.readouterr()
+    assert captured.out.strip() == "Hello"
+    
+    # Verify that the command output was cached
+    put_mock.assert_called_once_with('echo_signature', 'Hello')
+
+def test_exec_command_with_error(monkeypatch, mock_config, mock_logger, capsys, mock_binary):
+    monkeypatch.setattr(sys, 'argv', ['bincache', './error'])
+    with pytest.raises(SystemExit) as pytest_wrapped_e:
+        main()
+    assert pytest_wrapped_e.type == SystemExit
+    assert pytest_wrapped_e.value.code == 1
+
+    captured = capsys.readouterr()
+    assert captured.out.strip() == 'error_stdout'
+    assert captured.err.strip() == 'error_stderr'
+
+def test_cached_output_with_error(monkeypatch, mock_binary, mock_logger, capsys):
+    monkeypatch.setattr(sys, 'argv', ['bincache', './error_cache'])
+    with pytest.raises(SystemExit) as pytest_wrapped_e:
+        main()
+    assert pytest_wrapped_e.type == SystemExit
+    assert pytest_wrapped_e.value.code == 0  # Assuming we read from cache and do not execute
+    captured = capsys.readouterr()
+    assert captured.out == "error_cached_output"
