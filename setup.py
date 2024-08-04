@@ -12,7 +12,7 @@ setup(
     },
     author="simpx",
     author_email="simpxx@gmail.com",
-    description="binary runner with cache",
+    description="Bincache is a command-line utility designed to cache the output of executable binaries and shell commands.",
     long_description=open('README.md').read(),
     long_description_content_type="text/markdown",
     url="https://github.com/simpx/bincache",
