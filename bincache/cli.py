@@ -11,9 +11,10 @@ from bincache.signature import generate_signature
 config = get_config()
 logger = get_logger()
 
-def execute_command(command, args):
+def execute_command(argv):
     try:
-        result = subprocess.Popen([command] + args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        command = argv[0]
+        result = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = result.communicate()
         stdout = stdout.decode('utf-8')
         stderr = stderr.decode('utf-8')
@@ -37,16 +38,19 @@ def main():
         print("  bincache date")
         print("  bincache ./a.out -l -a")
         sys.exit(1)
-    binary = shutil.which(sys.argv[1])
-    args = sys.argv[2:]
+    try:
+        binary = shutil.which(sys.argv[1])
+        args = sys.argv[2:]
 
-    cache_key = generate_signature(binary, args)
-    cached_output = get(cache_key)
-    if cached_output is not None:
-        sys.stdout.write(cached_output)
-        sys.exit(0)
+        cache_key = generate_signature(binary, args)
+        cached_output = get(cache_key)
+        if cached_output is not None:
+            sys.stdout.write(cached_output)
+            sys.exit(0)
+    except Exception as e:
+        pass
     
-    returncode, stdout, stderr = execute_command(sys.argv[1], args)
+    returncode, stdout, stderr = execute_command(sys.argv[1:])
 
     if returncode == 0 and not stderr:
         try:

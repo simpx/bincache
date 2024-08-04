@@ -261,3 +261,43 @@ def test_exec_other_error(monkeypatch, mock_binary, mock_config, mock_logger, ca
     captured = capsys.readouterr()
     assert captured.out.strip() == ''
     assert 'bincache: error executing: ./other_error:' in captured.err.strip()
+
+# case: 即使bincache内部异常，也会正常执行命令
+def test_exec_command_with_bincache_error(monkeypatch, mock_config, mock_logger, capsys, mock_binary):
+    monkeypatch.setattr(sys, 'argv', ['bincache', 'echo', 'Hello'])
+
+    def raise_error(*args, **kwargs):
+        raise Exception('bincache error')
+
+    monkeypatch.setattr('bincache.cli.shutil.which', raise_error)
+    monkeypatch.setattr('bincache.cli.generate_signature', raise_error)
+    monkeypatch.setattr('bincache.cli.put', raise_error)
+    monkeypatch.setattr('bincache.cli.get', raise_error)
+
+    with pytest.raises(SystemExit) as pytest_wrapped_e:
+        main()
+    assert pytest_wrapped_e.type == SystemExit
+    assert pytest_wrapped_e.value.code == 0
+
+    captured = capsys.readouterr()
+    assert captured.out.strip() == "Hello"
+
+# case: 即使bincache内部全部返回None，也会正常执行命令
+def test_exec_command_with_bincache_error(monkeypatch, mock_config, mock_logger, capsys, mock_binary):
+    monkeypatch.setattr(sys, 'argv', ['bincache', 'echo', 'Hello'])
+
+    def return_None(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr('bincache.cli.shutil.which', return_None)
+    monkeypatch.setattr('bincache.cli.generate_signature', return_None)
+    monkeypatch.setattr('bincache.cli.put', return_None)
+    monkeypatch.setattr('bincache.cli.get', return_None)
+
+    with pytest.raises(SystemExit) as pytest_wrapped_e:
+        main()
+    assert pytest_wrapped_e.type == SystemExit
+    assert pytest_wrapped_e.value.code == 0
+
+    captured = capsys.readouterr()
+    assert captured.out.strip() == "Hello"
