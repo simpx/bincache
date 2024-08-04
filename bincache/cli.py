@@ -36,7 +36,6 @@ def main():
     try:
         binary = shutil.which(sys.argv[1])
         args = sys.argv[2:]
-
         cache_key = generate_signature(binary, args)
         cached_output = get(cache_key)
         if cached_output is not None:
@@ -46,7 +45,6 @@ def main():
         pass
     
     returncode, stdout, stderr = execute_command(sys.argv[1:])
-
     if returncode == 0 and not stderr:
         try:
             put(cache_key, stdout)
