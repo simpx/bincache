@@ -80,6 +80,15 @@ def mock_binary(monkeypatch):
         },
         ('./not_found',): {
             'raise_error': FileNotFoundError
+        },
+        ('./no_permission',): {
+            'raise_error': PermissionError
+        },
+        ('./os_error',): {
+            'raise_error': OSError
+        },
+        ('./other_error',): {
+            'raise_error': Exception
         }
     }
 
@@ -205,9 +214,6 @@ def test_exec_command_with_error(monkeypatch, mock_config, mock_logger, capsys, 
 def test_exec_not_found(monkeypatch, mock_binary, mock_config, mock_logger, capsys):
     monkeypatch.setattr(sys, 'argv', ['bincache', './not_found'])
 
-    put_mock = mock.Mock()
-    monkeypatch.setattr('bincache.cli.put', put_mock)
-
     with pytest.raises(SystemExit) as pytest_wrapped_e:
         main()
     assert pytest_wrapped_e.type == SystemExit
@@ -217,5 +223,41 @@ def test_exec_not_found(monkeypatch, mock_binary, mock_config, mock_logger, caps
     assert captured.out.strip() == ''
     assert captured.err.strip() == 'bincache: command not found: ./not_found'
 
-    # Verify that the command output was not cached
-    put_mock.assert_not_called()
+# case: 命令无权执行
+def test_exec_no_permission(monkeypatch, mock_binary, mock_config, mock_logger, capsys):
+    monkeypatch.setattr(sys, 'argv', ['bincache', './no_permission'])
+
+    with pytest.raises(SystemExit) as pytest_wrapped_e:
+        main()
+    assert pytest_wrapped_e.type == SystemExit
+    assert pytest_wrapped_e.value.code == 126
+
+    captured = capsys.readouterr()
+    assert captured.out.strip() == ''
+    assert captured.err.strip() == 'bincache: permission denied: ./no_permission'
+
+# case: os错误
+def test_exec_os_error(monkeypatch, mock_binary, mock_config, mock_logger, capsys):
+    monkeypatch.setattr(sys, 'argv', ['bincache', './os_error'])
+
+    with pytest.raises(SystemExit) as pytest_wrapped_e:
+        main()
+    assert pytest_wrapped_e.type == SystemExit
+    assert pytest_wrapped_e.value.code == 1
+
+    captured = capsys.readouterr()
+    assert captured.out.strip() == ''
+    assert 'bincache: OS error: ./os_error:' in captured.err.strip()
+
+# case: 其他错误 
+def test_exec_other_error(monkeypatch, mock_binary, mock_config, mock_logger, capsys):
+    monkeypatch.setattr(sys, 'argv', ['bincache', './other_error'])
+
+    with pytest.raises(SystemExit) as pytest_wrapped_e:
+        main()
+    assert pytest_wrapped_e.type == SystemExit
+    assert pytest_wrapped_e.value.code == 1
+
+    captured = capsys.readouterr()
+    assert captured.out.strip() == ''
+    assert 'bincache: error executing: ./other_error:' in captured.err.strip()

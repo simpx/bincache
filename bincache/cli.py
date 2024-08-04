@@ -23,9 +23,9 @@ def execute_command(command, args):
     except PermissionError:
         return 126, "", f"bincache: permission denied: {command}\n"
     except OSError as e:
-        return 1, "", f"bincache: OS error: {str(e)}\n"
+        return 1, "", f"bincache: OS error: {command}: {str(e)}\n"
     except Exception as e:
-        return 1, "", f"bincache: error executing {command}: {str(e)}\n"
+        return 1, "", f"bincache: error executing: {command}: {str(e)}\n"
 
 def main():
     if len(sys.argv) < 2:
