@@ -6,6 +6,7 @@ import shutil
 from bincache.config import get_config
 from bincache.log import get_logger
 from bincache.cache import get, put
+from bincache.signature import generate_signature
 
 config = get_config()
 logger = get_logger()
@@ -22,11 +23,11 @@ def main():
         sys.exit(1)
     binary = shutil.which(sys.argv[1])
     args = sys.argv[2:]
-    cache_key = generate_cache_key(binary, args)
+    cache_key = generate_signature(binary, args)
     cached_output = get(cache_key)
     if cached_output is not None:
         sys.stdout.write(cached_output)
-        sys.exit()
+        sys.exit(0)
 
     result = subprocess.Popen(sys.argv[1:], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = result.communicate()
