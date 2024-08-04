@@ -1,4 +1,5 @@
 import hashlib
+import subprocess
 
 def hash_file_md5(file_path):
     md5 = hashlib.md5()
@@ -34,8 +35,10 @@ def get_dynamic_libs(binary):
             parts = line.split('=>')
             name = parts[0].strip()
             path = parts[1].strip()
-        else:
+        elif line.startswith('/'):
             path = line.strip()
+        else:
+            name = line.strip()
         libs.append((name, path, address))
     return libs
 
@@ -46,6 +49,6 @@ def generate_signature(binary, args):
     libs = get_dynamic_libs(binary)
     if libs is None:
         return None
-    libs_info = [(libname, hash_file_md5(libpath)) for libname, libpath, address in libs if libpath]
+    libs_info = [(libpath, hash_file_md5(libpath)) for libname, libpath, address in libs if libpath]
     hash_data = str(binary_info) + str(libs_info) + " ".join(args)
     return hashlib.md5(hash_data.encode('utf-8')).hexdigest()
