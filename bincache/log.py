@@ -16,3 +16,18 @@ def get_logger():
             log_handler.setFormatter(log_formatter)
             _logger.addHandler(log_handler)
     return _logger
+
+def debug(msg):
+    get_logger().debug(msg)
+
+def info(msg):
+    get_logger().info(msg)
+
+def warning(msg):
+    get_logger().warning(msg)
+
+def error(msg):
+    get_logger().error(msg)
+
+def critical(msg):
+    get_logger().critical(msg)
