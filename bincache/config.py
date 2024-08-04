@@ -28,7 +28,8 @@ def get_config():
             'log_file': DEFAULT_LOG_FILE,
             'log_level': DEFAULT_LOG_LEVEL,
             'stats': DEFAULT_STATS,
-            'temporary_dir': os.path.join(cache_dir, 'tmp')
+            'temporary_dir': os.path.join(cache_dir, 'tmp'),
+            'cache_dir': cache_dir
         }
         if os.path.exists(config_file):
             with open(config_file, 'r') as f:

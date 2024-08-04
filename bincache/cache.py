@@ -1,17 +1,17 @@
 import os
 import pickle
 import tempfile
-from config import get_config
-
-config = get_config()
+from bincache.config import get_config
 
 def get_cache_file_path(key):
+    config = get_config()
     prefix = key[:2]
     filename = key[2:]
-    cache_file_folder = os.path.join(CACHE_DIR, prefix)
+    cache_file_folder = os.path.join(config['cache_dir'], prefix)
     return os.path.join(cache_file_folder, filename)
 
 def put(key, value):
+    config = get_config()
     cache_file_path = get_cache_file_path(key)
     if cache_file_path is None:
         return
