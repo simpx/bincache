@@ -39,7 +39,9 @@ def main():
         cache_key = generate_signature(binary, args)
         cached_output = get(cache_key)
         if cached_output is not None:
-            print(cached_output, end="")
+            stdout, stderr = cached_output['stdout'], cached_output['stderr']
+            print(stdout, end="")
+            print(stderr, end="", file=sys.stderr)
             sys.exit(0)
     except Exception as e:
         pass
@@ -47,7 +49,8 @@ def main():
     returncode, stdout, stderr = execute_command(sys.argv[1:])
     if returncode == 0: # TODO and not stderr:
         try:
-            put(cache_key, stdout)
+            output = {'stdout': stdout, 'stderr': stderr}
+            put(cache_key, output)
         except Exception as e:
             pass
     print(stdout, end="")

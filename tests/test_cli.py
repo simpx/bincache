@@ -97,8 +97,8 @@ def mock_binary(monkeypatch):
         if key is None:
             return None
         for binary, details in cache_map.items():
-            if key == details.get('signature'):
-                return details.get('cached_output')
+            if key == details.get('signature') and 'cached_output' in details:
+                return {'stdout': details.get('cached_output'), 'stderr': ''}
         return None
 
     def popen_mock(*popen_args, **kwargs):
@@ -154,7 +154,7 @@ def test_exec_command_and_cache(monkeypatch, mock_config, capsys, mock_binary):
     assert captured.out.strip() == "Hello"
     
     # Verify that the command output was cached
-    put_mock.assert_called_once_with('echo_signature', 'Hello')
+    put_mock.assert_called_once_with('echo_signature', {'stdout': 'Hello', 'stderr': ''})
 
 # case: 未命中缓存且执行失败，并验证结果不会被缓存
 def test_exec_command_with_error(monkeypatch, mock_config, capsys, mock_binary):
@@ -185,7 +185,7 @@ def test_cached_output_with_error(monkeypatch, mock_binary, capsys):
     captured = capsys.readouterr()
     assert captured.out == "error_but_cached_output"
 
-# case: 未命中缓存且执行成功，但由于有stderr，所以不会被缓存
+# case: 未命中缓存且执行成功，即使有stderr，也会被缓存
 def test_exec_command_with_error(monkeypatch, mock_config, capsys, mock_binary):
     monkeypatch.setattr(sys, 'argv', ['bincache', './command_with_stderr'])
 
@@ -201,8 +201,8 @@ def test_exec_command_with_error(monkeypatch, mock_config, capsys, mock_binary):
     assert captured.out.strip() == 'error_stdout'
     assert captured.err.strip() == 'error_stderr'
 
-    # Verify that the command output was not cached
-    put_mock.assert_not_called()
+    # Verify that the command output was cached
+    put_mock.assert_called_once_with('command_with_stderr_signature', {'stdout': 'error_stdout', 'stderr': 'error_stderr'})
 
 # case: 命令不存在
 def test_exec_not_found(monkeypatch, mock_binary, mock_config, capsys):
