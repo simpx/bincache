@@ -45,7 +45,7 @@ def main():
         pass
     
     returncode, stdout, stderr = execute_command(sys.argv[1:])
-    if returncode == 0 and not stderr:
+    if returncode == 0: # TODO and not stderr:
         try:
             put(cache_key, stdout)
         except Exception as e:
