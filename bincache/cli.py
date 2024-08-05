@@ -39,7 +39,7 @@ def main():
         cache_key = generate_signature(binary, args)
         cached_output = get(cache_key)
         if cached_output is not None:
-            sys.stdout.write(cached_output)
+            print(cached_output, end="")
             sys.exit(0)
     except Exception as e:
         pass
@@ -50,8 +50,8 @@ def main():
             put(cache_key, stdout)
         except Exception as e:
             pass
-    sys.stdout.write(stdout)
-    sys.stderr.write(stderr)
+    print(stdout, end="")
+    print(stderr, end="", file=sys.stderr)
     sys.exit(returncode)
 
 if __name__ == "__main__":
